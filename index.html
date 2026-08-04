@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="light" data-font="medium">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="แพลตฟอร์มนำเสนอการออกแบบกิจกรรมการเรียนรู้ PISA 2029 สำหรับผู้บริหาร ครูผู้สอน ศึกษานิเทศก์ และผู้สนใจ">
+  <meta name="keywords" content="PISA 2029, กิจกรรมการเรียนรู้, MAIL Literacy, AI, Critical Thinking, Digital Citizenship">
+  <meta name="author" content="PISA 2029 Learning Platform">
+  <meta property="og:title" content="PISA 2029 | กิจกรรมการเรียนรู้เพื่อเตรียมพร้อม">
+  <meta property="og:description" content="ออกแบบกิจกรรมการเรียนรู้ MAIL Literacy สำหรับ PISA 2029">
+  <meta property="og:type" content="website">
+  <title>PISA 2029 | กิจกรรมการเรียนรู้เพื่อเตรียมพร้อมรับการประเมิน</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════
+       HEADER – Sticky, Glassmorphism
+       ═══════════════════════════════════════════════════ -->
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+
+      <!-- Brand -->
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">🎓</div>
+        <div>
+          <div class="brand-name">PISA 2029</div>
+          <div class="brand-sub">กิจกรรมการเรียนรู้ MAIL Literacy</div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="header-controls" role="toolbar" aria-label="ตัวควบคุมการแสดงผล">
+
+        <!-- Font Size -->
+        <div class="ctrl-group" role="group" aria-label="ขนาดตัวอักษร">
+          <span class="ctrl-label">ขนาดตัวอักษร</span>
+          <button id="font-small"  class="ctrl-btn" data-font-btn="small"
+            onclick="setFont('small')"  title="ตัวอักษรขนาดเล็ก"  aria-label="ขนาดเล็ก">ก เล็ก</button>
+          <button id="font-medium" class="ctrl-btn active" data-font-btn="medium"
+            onclick="setFont('medium')" title="ตัวอักษรขนาดกลาง" aria-label="ขนาดกลาง">ก กลาง</button>
+          <button id="font-large"  class="ctrl-btn" data-font-btn="large"
+            onclick="setFont('large')"  title="ตัวอักษรขนาดใหญ่" aria-label="ขนาดใหญ่">ก ใหญ่</button>
+        </div>
+
+        <!-- Theme -->
+        <div class="ctrl-group" role="group" aria-label="ธีมสี">
+          <span class="ctrl-label">ธีม</span>
+          <button id="theme-light" class="ctrl-btn active" data-theme-btn="light"
+            onclick="setTheme('light')" title="ธีมสว่าง" aria-label="ธีมสว่าง">☀️ สว่าง</button>
+          <button id="theme-warm"  class="ctrl-btn" data-theme-btn="warm"
+            onclick="setTheme('warm')"  title="ธีมอบอุ่น" aria-label="ธีมอบอุ่น">🌅 อบอุ่น</button>
+          <button id="theme-dark"  class="ctrl-btn" data-theme-btn="dark"
+            onclick="setTheme('dark')"  title="ธีมมืด" aria-label="ธีมมืด">🌙 มืด</button>
+        </div>
+
+        <!-- Refresh -->
+        <button id="refreshBtn" class="btn-refresh" onclick="loadData()"
+          title="รีเฟรชข้อมูลจาก Google Sheets" aria-label="รีเฟรชข้อมูล">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 4v6h-6"/>
+            <path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          รีเฟรช
+        </button>
+
+      </div><!-- /header-controls -->
+    </div><!-- /header-inner -->
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════ -->
+  <section class="hero" aria-labelledby="heroTitle">
+    <div class="hero-inner">
+      <div class="hero-eyebrow">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        MAIL Literacy Framework
+      </div>
+
+      <h1 id="heroTitle">
+        การออกแบบกิจกรรมการเรียนรู้<br>เพื่อพร้อมรับการประเมิน PISA 2029
+      </h1>
+
+      <p>
+        แพลตฟอร์มรวบรวมกิจกรรมการเรียนรู้ที่เชื่อมโยงกรอบแนวคิด <strong>MAIL Literacy</strong>
+        เหมาะสำหรับผู้บริหาร ครูผู้สอน ศึกษานิเทศก์ และผู้สนใจในการพัฒนาผู้เรียน
+      </p>
+
+      <div class="hero-tags" role="list">
+        <span class="hero-tag" role="listitem">🤖 AI & Media Literacy</span>
+        <span class="hero-tag" role="listitem">🎯 PISA 2029 Framework</span>
+        <span class="hero-tag" role="listitem">🧠 Critical Thinking</span>
+        <span class="hero-tag" role="listitem">📱 Digital Citizenship</span>
+        <span class="hero-tag" role="listitem">⚖️ Digital Ethics</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════
+       MAIN CONTENT
+       ═══════════════════════════════════════════════════ -->
+  <main class="main-wrap" role="main">
+
+    <!-- Toolbar: Search + Stats -->
+    <div class="toolbar" role="search">
+      <div class="search-box">
+        <svg class="ico-search" width="18" height="18" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input
+          type="search"
+          id="searchInput"
+          class="search-input"
+          placeholder="ค้นหากิจกรรม หัวข้อ หรือคำสำคัญ (เช่น Deepfake, อัลกอริทึม, ลิขสิทธิ์…)"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+          aria-label="ค้นหากิจกรรมการเรียนรู้"
+        >
+        <button id="clearSearch" class="btn-clear-search"
+          title="ล้างการค้นหา" aria-label="ล้างการค้นหา">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+        <span class="stat-pill" id="statCount" aria-live="polite">กำลังโหลด...</span>
+        <span class="stat-pill last-updated" id="lastUpdated" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="cards-grid" id="cardsGrid" role="feed" aria-label="รายการกิจกรรมการเรียนรู้">
+      <!-- Populated by app.js -->
+      <div class="state-loading">
+        <div class="spinner" role="status" aria-label="กำลังโหลด"></div>
+        <p>กำลังโหลดข้อมูลจาก Google Sheets…</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════ -->
+  <footer class="site-footer" role="contentinfo">
+    <p>
+      🎓 <strong>PISA 2029 Learning Activities Platform</strong> &nbsp;|&nbsp;
+      ข้อมูล Real-time จาก
+      <a href="https://docs.google.com/spreadsheets/d/1vo2anZD6TpFUecCXxQOsAd2AoopzSksWgS7MqWLvjI4"
+        target="_blank" rel="noopener">Google Sheets</a>
+      &nbsp;|&nbsp; พัฒนาเพื่อผู้บริหาร ครูผู้สอน ศึกษานิเทศก์ และผู้สนใจ
+    </p>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+
+</body>
+</html>
