@@ -50,8 +50,10 @@ export default async function handler(req, res) {
 
     const csv = await upstream.text();
 
-    // ─── Cache: fresh 60 s, stale-while-revalidate 5 min ─
-    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    // ─── Cache: Disable all caching for real-time sync ──
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     return res.status(200).send(csv);
 

@@ -31,7 +31,7 @@ let toastTimer    = null;
 let lastUpdated   = null;
 let currentSig    = '';    // Google Sheets data signature (for change detection)
 let pollTimer     = null;  // Polling interval reference
-const POLL_INTERVAL_MS = 90_000; // ตรวจทุก 90 วินาที
+const POLL_INTERVAL_MS = 30_000; // ตรวจทุก 30 วินาที ( Real-time check )
 
 // ─── Embedded Fallback Data ──────────────────────────
 // ใช้เมื่อ network ไม่ตอบสนองเลย (เช่น ไม่มีอินเทอร์เน็ต)
@@ -404,18 +404,34 @@ function fetchViaJSONP(timeoutMs) {
       reject(new Error('Script load error – ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'));
     };
 
-    // Use &tq= to select all rows; callback= for JSONP
-    script.src = GVIZ_BASE + '&tq=&callback=' + cbName;
+    // Use &tq= to select all rows; callback= for JSONP; _t= timestamp to bypass all caches
+    script.src = GVIZ_BASE + '&tq=&callback=' + cbName + '&_t=' + Date.now();
     document.head.appendChild(script);
   });
 }
 
 // ─── Main Fetch Pipeline ─────────────────────────────
 async function fetchItems() {
-  // ── 1. Vercel serverless proxy (on Vercel, fastest) ──
+  // ── 1. JSONP via Google Visualization API (Direct, Real-time, Zero Cache) ──
+  // <script> tags bypass CORS entirely + _t= timestamp forces 100% fresh data from Google
+  try {
+    const data = await fetchViaJSONP(12000);
+    if (data && data.table) {
+      if (data.sig) currentSig = data.sig;
+      const items = gvizTableToItems(data.table);
+      if (items.length) {
+        console.log('[PISA] loaded via JSONP (fresh)', items.length, 'items | sig:', currentSig);
+        return items;
+      }
+    }
+  } catch (e) {
+    console.warn('[PISA] JSONP failed, trying Vercel proxy fallback:', e.message);
+  }
+
+  // ── 2. Vercel serverless proxy fallback ──
   if (window.location.protocol !== 'file:') {
     try {
-      const r = await fetchWithTimeout(API_PATH, 6000);
+      const r = await fetchWithTimeout(`${API_PATH}?_t=${Date.now()}`, 6000);
       if (r.ok) {
         const csv = await r.text();
         if (csv && csv.trim().length > 10) {
@@ -426,25 +442,7 @@ async function fetchItems() {
           }
         }
       }
-    } catch (_) { /* not on Vercel */ }
-  }
-
-  // ── 2. JSONP via Google Visualization API ──
-  // <script> tags bypass CORS entirely.
-  // Works from: file://, localhost, any browser, any domain.
-  try {
-    const data = await fetchViaJSONP(15000);
-    if (data && data.table) {
-      // ✅ บันทึก signature สำหรับตรวจจับการเปลี่ยนแปลง
-      if (data.sig) currentSig = data.sig;
-      const items = gvizTableToItems(data.table);
-      if (items.length) {
-        console.log('[PISA] loaded via JSONP', items.length, 'items | sig:', currentSig);
-        return items;
-      }
-    }
-  } catch (e) {
-    console.warn('[PISA] JSONP failed:', e.message);
+    } catch (_) { /* proxy unavailable */ }
   }
 
   // ── 3. Embedded fallback (always available) ──
@@ -610,8 +608,8 @@ function pollForChanges() {
     cleanup();
   };
 
-  // ดึงเฉพาะ metadata (limit=0 → ไม่ดึงข้อมูล rows จริง แต่ได้ sig)
-  script.src = GVIZ_BASE + '&tqlimit=0&callback=' + cbName;
+  // ดึงเฉพาะ metadata (limit=0 → ไม่ดึงข้อมูล rows จริง แต่ได้ sig) + _t= timestamp กันแคช
+  script.src = GVIZ_BASE + '&tqlimit=0&callback=' + cbName + '&_t=' + Date.now();
   document.head.appendChild(script);
 }
 
