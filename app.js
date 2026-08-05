@@ -89,8 +89,27 @@ const FALLBACK_DATA = [
 - ใบงานวิเคราะห์กรณีศึกษา 'AI Art vs. Copyright & Ethics Case Study'
 - สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Create with AI (Human Agency & Intellectual Property)
 - แพลตฟอร์มสร้างสรรค์ภาพ AI แบบเปิดกว้าง (เช่น Canva / Microsoft Designer) สำหรับการทดลองเขียนคำสั่งอย่างมีจริยธรรม`
+  },
+  {
+    id: '4',
+    title: 'PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI',
+    reference: 'https://www.thaipbs.or.th/verify/news/content/12322',
+    activities: `กิจกรรม "AI Data Privacy & Children's Rights Guard: คุ้มครองข้อมูลเด็ก เท่าทันภัยไซเบอร์และ AI" (สำหรับนักเรียน ม.1-ม.3):
+1. ขั้นนำ (Engage): ครูเปิดประเด็น "ป้อนคำถามหรือการบ้านให้ AI ช่วยทำ เสี่ยงทำข้อมูลส่วนตัวหลุดหรือไม่?" และชวนนักเรียนอภิปรายประสบการณ์การใช้งานแอปพลิเคชัน AI แชทบอท และโซเชียลมีเดีย
+2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าว "PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI" วิเคราะห์ประเภทข้อมูลส่วนบุคคล (PII) ที่ห้ามป้อนให้ AI (เช่น เลขบัตรประชาชน ภาพถ่าย/ชีวมิติ พฤติกรรมส่วนตัว ที่อยู่ และข้อมูลสุขภาพ) พร้อมจำแนกความเสี่ยงจากการถูก AI นำข้อมูลไปใช้ฝึกโมเดล (AI Data Training) หรือถูกแฮก
+3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ "ผังความคุ้มครองข้อมูลเด็กยุค AI" (Youth AI Privacy Guardian Checklist) และร่วมกันจำลองสถานการณ์การปรับปรุงเงื่อนไขความเป็นส่วนตัว (Privacy Settings) ก่อนใช้งานเครื่องมือ AI
+4. ขั้นสะท้อนคิด (Reflect): สรุปบทเรียนในมิติ PISA 2029 MAIL Literacy (Engage with AI & Shape AI) เกี่ยวกับสิทธิดิจิทัลของเด็ก (Children's Digital Rights) และการสร้างภูมิคุ้มกันในการใช้งาน AI อย่างปลอดภัยและรับผิดชอบ`,
+    assessment: `- ประเมินสมรรถนะการตระหนักรู้ด้านความเป็นส่วนตัวและการคุ้มครองข้อมูลส่วนบุคคล (AI Data Privacy Literacy): ตรวจสอบความถูกต้องของการจำแนกประเภทข้อมูล PII และข้อบกพร่องในเงื่อนไขการใช้งาน AI ผ่านแบบประเมินรูบริก (Rubric)
+- ประเมินผลงานชิ้นงานคู่มือ/เช็กลิสต์ความปลอดภัย (Youth AI Privacy Checklist Assessment): ประเมินการสร้างสรรค์คู่มือและแนวปฏิบัติการใช้งาน AI อย่างปลอดภัยด้วยแบบประเมินการสื่อสารและพลเมืองดิจิทัล
+- แบบวัดความรู้และวิจารณญาณดิจิทัล (PISA 2029 MAIL Data Privacy Quiz): แบบทดสอบประเมินสถานการณ์จำลองเกี่ยวกับการตัดสินใจเปิดเผยหรือปกป้องข้อมูลส่วนบุคคลเมื่อโต้ตอบกับ AI แชทบอท`,
+    materials: `- บทความข่าวจาก Thai PBS Verify เรื่อง "PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI" (https://www.thaipbs.or.th/verify/news/content/12322)
+- สื่อตัวอย่างข้อกำหนดความเป็นส่วนตัว (Terms of Service / Privacy Policy) ของแอปพลิเคชัน AI ที่นิยมในกลุ่มวัยรุ่น
+- ใบงานวิเคราะห์ประเภทข้อมูล "PII & AI Risk Mapping Worksheet"
+- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Engage with AI และ Shape AI
+- เครื่องมือประเมินและสะท้อนคิดออนไลน์ (เช่น Canva / Padlet / Kahoot)`
   }
 ];
+
 
 // ─── CSV Parser (multiline-safe) ─────────────────────
 function parseCSV(raw) {
@@ -412,44 +431,71 @@ function fetchViaJSONP(timeoutMs) {
 
 // ─── Main Fetch Pipeline ─────────────────────────────
 async function fetchItems() {
-  // ── 1. JSONP via Google Visualization API (Direct, Real-time, Zero Cache) ──
-  // <script> tags bypass CORS entirely + _t= timestamp forces 100% fresh data from Google
-  try {
-    const data = await fetchViaJSONP(12000);
-    if (data && data.table) {
-      if (data.sig) currentSig = data.sig;
-      const items = gvizTableToItems(data.table);
-      if (items.length) {
-        console.log('[PISA] loaded via JSONP (fresh)', items.length, 'items | sig:', currentSig);
-        return items;
-      }
-    }
-  } catch (e) {
-    console.warn('[PISA] JSONP failed, trying Vercel proxy fallback:', e.message);
-  }
+  const ts = Date.now(); // timestamp กันแคชทุกรอบ
 
-  // ── 2. Vercel serverless proxy fallback ──
-  if (window.location.protocol !== 'file:') {
-    try {
-      const r = await fetchWithTimeout(`${API_PATH}?_t=${Date.now()}`, 6000);
-      if (r.ok) {
-        const csv = await r.text();
-        if (csv && csv.trim().length > 10) {
-          const items = rowsToItems(parseCSV(csv));
+  // ── 1. fetch() JSON direct – เร็วสุด, real-time ──
+  // Google Visualization JSON endpoint อนุญาต CORS สำหรับ Public Sheet
+  try {
+    const url = `${GVIZ_BASE}&tqx=out:json&_t=${ts}`;
+    const r   = await fetchWithTimeout(url, 10000);
+    if (r.ok) {
+      const text = await r.text();
+      // Google wraps response in: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
+      const m = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
+      if (m) {
+        const data = JSON.parse(m[1]);
+        if (data.status === 'ok' && data.table?.rows?.length) {
+          if (data.sig) currentSig = data.sig;
+          const items = gvizTableToItems(data.table);
           if (items.length) {
-            console.log('[PISA] loaded via Vercel proxy', items.length, 'items');
+            console.log('[PISA] ✅ fetch() JSON direct', items.length, 'items | sig:', currentSig);
             return items;
           }
         }
       }
-    } catch (_) { /* proxy unavailable */ }
+    }
+  } catch (e) {
+    console.warn('[PISA] fetch JSON failed:', e.message);
   }
 
-  // ── 3. Embedded fallback (always available) ──
-  console.info('[PISA] using embedded fallback data');
-  toast('แสดงข้อมูล Offline (กด Refresh เพื่อลองใหม่เมื่อมีอินเทอร์เน็ต)', 'ℹ️');
+  // ── 2. JSONP via <script> tag – Zero CORS, works on file:// ──
+  try {
+    const data = await fetchViaJSONP(12000);
+    if (data?.table?.rows?.length) {
+      if (data.sig) currentSig = data.sig;
+      const items = gvizTableToItems(data.table);
+      if (items.length) {
+        console.log('[PISA] ✅ JSONP', items.length, 'items | sig:', currentSig);
+        return items;
+      }
+    }
+  } catch (e) {
+    console.warn('[PISA] JSONP failed:', e.message);
+  }
+
+  // ── 3. Vercel proxy fallback ──
+  if (window.location.protocol !== 'file:') {
+    try {
+      const r = await fetchWithTimeout(`${API_PATH}?_t=${ts}`, 8000);
+      if (r.ok) {
+        const csv = await r.text();
+        if (csv?.trim().length > 10) {
+          const items = rowsToItems(parseCSV(csv));
+          if (items.length) {
+            console.log('[PISA] ✅ Vercel proxy', items.length, 'items');
+            return items;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ── 4. Embedded fallback (รับประกันเสมอ 4 รายการ) ──
+  console.info('[PISA] ℹ️ using embedded fallback data (', FALLBACK_DATA.length, 'items)');
+  toast('แสดงข้อมูล Offline – กด Refresh เมื่อมีอินเทอร์เน็ต', 'ℹ️');
   return FALLBACK_DATA;
 }
+
 
 // ─── Load Data ───────────────────────────────────────
 async function loadData() {
