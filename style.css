@@ -373,15 +373,83 @@ body {
   -webkit-box-orient: vertical; overflow: hidden;
 }
 
+.card-ref-group {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem;
+}
+
 .card-ref {
   display: inline-flex; align-items: center; gap: 0.3rem;
   font-size: var(--font-xs); color: var(--accent-text);
   text-decoration: none; font-weight: 600;
   padding: 0.2rem 0.5rem; border-radius: var(--r-sm);
   background: var(--accent-soft);
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, background 0.2s;
 }
-.card-ref:hover { opacity: 0.75; }
+.card-ref:hover { opacity: 0.85; }
+
+.card-doc {
+  background: #E8F0FE;
+  color: #1A73E8;
+  border: 1px solid rgba(26, 115, 232, 0.25);
+}
+.card-doc:hover { background: #D2E3FC; opacity: 1; }
+
+[data-theme="dark"] .card-doc {
+  background: rgba(26, 115, 232, 0.22);
+  color: #8AB4F8;
+  border-color: rgba(138, 180, 248, 0.3);
+}
+
+[data-theme="warm"] .card-doc {
+  background: #FEF3C7;
+  color: #B45309;
+  border-color: rgba(180, 83, 9, 0.3);
+}
+
+.assessment-tool-banner {
+  background: linear-gradient(135deg, rgba(26, 115, 232, 0.08), rgba(79, 70, 229, 0.08));
+  border: 1px solid rgba(26, 115, 232, 0.25);
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.85rem;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.65rem; flex-wrap: wrap;
+}
+
+[data-theme="dark"] .assessment-tool-banner {
+  background: linear-gradient(135deg, rgba(26, 115, 232, 0.15), rgba(129, 140, 248, 0.15));
+  border-color: rgba(138, 180, 248, 0.3);
+}
+
+.assessment-tool-banner .tool-info {
+  display: flex; align-items: center; gap: 0.55rem;
+}
+
+.assessment-tool-banner .tool-icon {
+  font-size: 1.25rem;
+}
+
+.assessment-tool-banner .tool-title {
+  font-size: var(--font-xs); font-weight: 700; color: var(--text-h); line-height: 1.3;
+}
+
+.assessment-tool-banner .tool-desc {
+  font-size: calc(var(--font-xs) * 0.92); color: var(--text-muted); line-height: 1.3;
+}
+
+.btn-open-tool {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  background: #1A73E8; color: #FFFFFF;
+  text-decoration: none; font-size: var(--font-xs); font-weight: 600;
+  padding: 0.35rem 0.7rem; border-radius: var(--r-sm);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.25);
+  white-space: nowrap;
+}
+
+.btn-open-tool:hover {
+  background: #1557B0; transform: translateY(-1px);
+}
 
 /* Card Tabs */
 .card-tabs {

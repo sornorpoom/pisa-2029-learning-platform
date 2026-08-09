@@ -42,16 +42,17 @@ function getData() {
     const lastCol = sheet.getLastColumn();
     if (lastRow < 2) return JSON.stringify([]);
 
-    const raw = sheet.getRange(1, 1, lastRow, Math.max(lastCol, 6)).getValues();
+    const raw = sheet.getRange(1, 1, lastRow, Math.max(lastCol, 7)).getValues();
 
     const items = raw.slice(1)   // skip header
       .map((row, i) => ({
-        id:         String(row[0] || i + 1),
-        title:      String(row[1] || '').trim(),
-        reference:  String(row[2] || '').trim(),
-        activities: String(row[3] || '').trim(),
-        assessment: String(row[4] || '').trim(),
-        materials:  String(row[5] || '').trim(),
+        id:             String(row[0] || i + 1).replace(/\.0$/, '').trim(),
+        title:          String(row[1] || '').trim(),
+        reference:      String(row[2] || '').trim(),
+        activities:     String(row[3] || '').trim(),
+        assessment:     String(row[4] || '').trim(),
+        materials:      String(row[5] || '').trim(),
+        assessmentTool: String(row[6] || '').trim(),
       }))
       .filter(it => it.title);
 
