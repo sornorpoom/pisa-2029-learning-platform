@@ -1,10 +1,10 @@
 /* =====================================================
-   PISA 2029 – app.js  v2 (JSONP Fix)
+   PISA 2029 – app.js  v3 (Clean Rebuild)
    ─────────────────────────────────────────────────────
    Data pipeline (ลำดับความสำคัญ):
-   1. /api/sheets   → Vercel serverless proxy  (fastest on Vercel)
-   2. JSONP gviz    → <script> tag, ZERO CORS  (works on file://)
-   3. Embedded data → always works offline
+   1. fetch() JSON direct  → real-time, CORS allowed on public sheets
+   2. JSONP gviz           → <script> tag, ZERO CORS (works on file://)
+   3. Embedded FALLBACK    → always works offline
    ===================================================== */
 
 'use strict';
@@ -12,10 +12,9 @@
 // ─── Config ──────────────────────────────────────────
 const SHEET_ID   = '1vo2anZD6TpFUecCXxQOsAd2AoopzSksWgS7MqWLvjI4';
 const SHEET_TAB  = 'PISA 2029';
-const API_PATH   = '/api/sheets';   // Vercel serverless proxy
+const API_PATH   = '/api/sheets';   // Vercel serverless proxy (legacy, optional)
 
 // Google Visualization JSONP endpoint
-// ✅ No CORS: loaded via <script> tag, works from file://, localhost, any domain
 const GVIZ_BASE  =
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq` +
   `?sheet=${encodeURIComponent(SHEET_TAB)}`;
@@ -31,103 +30,112 @@ let toastTimer    = null;
 let lastUpdated   = null;
 let currentSig    = '';    // Google Sheets data signature (for change detection)
 let pollTimer     = null;  // Polling interval reference
-const POLL_INTERVAL_MS = 30_000; // ตรวจทุก 30 วินาที ( Real-time check )
+const POLL_INTERVAL_MS = 30_000; // ตรวจทุก 30 วินาที
 
-// ─── Embedded Fallback Data ───
+// ─── Embedded Fallback Data ───────────────────────────
 // ใช้เมื่อ network ไม่ตอบสนองเลย (เช่น ไม่มีอินเทอร์เน็ต)
+// ข้อมูลนี้ sync กับ Google Sheets ณ เวลาที่ deploy ล่าสุด
 const FALLBACK_DATA = [
-    {
-        "id":  "1",
-        "reference":  "https://www.thaipbs.or.th/verify/article/content/14211",
-        "assessmentTool":  "https://docs.google.com/document/d/1k_dNo7BSW6VDSSIL1BW9PSoVbPJ_WIaM1mz8bFvSJag/edit?usp=sharing",
-        "activities":  "กิจกรรม \u0027Spot the Fake: จับโป๊ะ AI Deepfake และสแกมเมอร์ไซเบอร์\u0027 (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดคลิปวิดีโอ/ภาพเปรียบเทียบระหว่างบุคคลจริงกับภาพ Deepfake ที่สร้างโดย AI แล้วให้นักเรียนร่วมกันตั้งคำถามว่า \u0027ภาพ/เสียงนี้เป็นของจริงหรือไม่? รู้ได้อย่างไร?\u0027\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าวการใช้ AI Deepfake ปลอมแปลงหน้าและเสียงในเหตุการณ์หลอกโอนเงิน ร่วมกันวิเคราะห์องค์ประกอบ 3 ด้าน ได้แก่ (1) ข้อบกพร่องทางเทคนิคของ AI (เช่น กะพริบตาผิดธรรมชาติ เสียงไม่มีน้ำหนัก แสงเงาผิดปกติ) (2) เจตนาของผู้สร้าง (Intent) และ (3) ผลกระทบทางสังคมและจริยธรรม\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนออกแบบ \u0027คู่มือเช็กลิสต์การตรวจสอบ AI Deepfake\u0027 (AI Verification Checklist) และร่วมกันสร้างสถานการณ์จำลอง (Role-play) การตั้งคำถามเพื่อยืนยันตัวตน (Human Verification Protocol) เมื่อพบเจอการติดต่อผ่านวิดีโอคอลหรือสื่อสังเคราะห์\n4. ขั้นสะท้อนคิด (Reflect): สรุปบทเรียนในมิติ PISA 2029 MAIL Literacy เกี่ยวกับความรับผิดชอบ การตั้งคำถามอย่างมีวิจารณญาณก่อนเชื่อหรือแชร์ข้อมูล (Critical Thinking \u0026 Human Agency)",
-        "assessment":  "- ประเมินสมรรถนะการวิเคราะห์สื่อสังเคราะห์ (Synthetic Media Analysis): ตรวจสอบความถูกต้องของคู่มือเช็กลิสต์การจับสังเกต AI Deepfake โดยใช้แบบประเมินรูบริก (Rubric) ด้านการคิดเชิงวิพากษ์ (Critical Thinking)\n- ประเมินการปฏิบัติในสถานการณ์จำลอง (Role-play Assessment): ประเมินความสามารถในการใช้โปรโตคอลยืนยันตัวตนและการแก้ปัญหาเฉพาะหน้าเมื่อเผชิญภัยไซเบอร์จาก AI\n- แบบวัดการรู้เท่าทันสื่อและปัญญาประดิษฐ์ (MAIL Literacy Quiz): แบบทดสอบปรนัยและอัตนัยประเมินความเข้าใจเกี่ยวกับเจตนา สิทธิความเป็นส่วนตัว (Privacy) และผลกระทบทางจริยธรรมของ AI ตามกรอบ PISA 2029",
-        "materials":  "- บทความข่าวเตือนภัย Deepfake จาก Thai PBS Verify (https://www.thaipbs.or.th/verify/article/content/14211)\n- ตัวอย่างสื่อสังเคราะห์ (Deepfake Video \u0026 Voice Clips) สำหรับฝึกจับโป๊ะ\n- ใบงานวิเคราะห์องค์ประกอบข่าวสารและเจตนาของสื่อ AI (AI Media Analysis Worksheet)\n- สไลด์นำเสนอความรู้เรื่องกรอบแนวคิด PISA 2029 MAIL Literacy\n- แพลตฟอร์มดิจิทัล interactive (เช่น Kahoot / Padlet) สำหรับระดมความคิดและทำแบบทดสอบ",
-        "title":  "เตือนภัย Deepfake ปลอมเป็นผู้นำและผู้บริหาร หลอกโอนเงินผ่าน Zoom และสื่อสังเคราะห์"
-    },
-    {
-        "id":  "2",
-        "reference":  "https://www.thaipbs.or.th/verify/article/content/6225",
-        "assessmentTool":  "https://docs.google.com/document/d/1r0Z46fwsBv_HWAihxDiDromiiAP7HvFrmBetSILULP4/edit?usp=sharing",
-        "activities":  "กิจกรรม \u0027Decoder of Algorithmic Echo Chamber \u0026 AI Slop: ถอดรหัสอัลกอริทึมและขยะดิจิทัล\u0027 (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูให้นักเรียนเปรียบเทียบหน้าฟีดโซเชียลมีเดียของตนเอง แล้วร่วมกันอภิปรายว่า \u0027ทำไมเนื้อหาที่ระบบแนะนำให้เราแต่ละคนจึงไม่เหมือนกัน? และเนื้อหาคุณภาพต่ำที่สร้างจาก AI (AI Slop) ถูกดันขึ้นมาได้อย่างไร?\u0027\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนอ่านบทความข่าวเรื่องสงครามข้อมูลและอัลกอริทึม ร่วมกันวิเคราะห์ 3 ประเด็นหลัก: (1) การทำงานของอัลกอริทึมในการจัดลำดับเนื้อหา (Algorithmic Curation/Filter Bubbles) (2) ลักษณะของคอนเทนต์ขยะ AI (AI Slop) ที่เน้นยอดคลิก (Clickbait) แต่ขาดความถูกต้อง และ (3) ผลกระทบต่อความคิดเห็นและการตัดสินใจในสังคม\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนทดลองออกแบบ \u0027แผนผังผดุงจริยธรรมอัลกอริทึม\u0027 (Ethical Feed Design) และจัดทำอินโฟกราฟิกแนะนำวิธี \u0027ฝึกอัลกอริทึมให้ฉลาด\u0027 (Algorithmic Literacy \u0026 Curation) เช่น การตรวจสอบแหล่งข่าว การป้อนข้อมูลป้อนกลับเชิงบวกแก่เนื้อหาที่มีคุณภาพ และการรายงานเนื้อหาบิดเบือน\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันอภิปรายถกแถลงในมิติ PISA 2029 MAIL Literacy (Shape AI \u0026 Engage with AI) ถึงบทบาทของเยาวชนในการลดมลพิษดิจิทัลและการใช้โซเชียลมีเดียอย่างตระหนักรู้",
-        "assessment":  "- ประเมินสมรรถนะการรู้เท่าทันอัลกอริทึม (Algorithmic Literacy Assessment): ประเมินความเข้าใจเรื่องโครงสร้างอัลกอริทึมและห้องสะท้อนเสียง (Echo Chambers) ผ่านใบงานวิเคราะห์กรณีศึกษา\n- ประเมินผลงานการออกแบบ (Creative \u0026 Solution-Based Assessment): ประเมินชิ้นงานอินโฟกราฟิก \u0027การฝึกอัลกอริทึมและคัดกรอง AI Slop\u0027 ด้วยแบบประเมินรูบริก (Rubric) ด้านการสื่อสารและความเป็นพลเมืองดิจิทัล\n- แบบวัดทักษะการตั้งคำถามเชิงวิพากษ์ (PISA 2029 MAIL Critical Questions Quiz): แบบทดสอบประเมินความสามารถในการจำแนกเจตนาของสื่อและการประเมินความน่าเชื่อถือของเนื้อหาที่แนะนำโดย AI",
-        "materials":  "- บทความข่าวจาก Thai PBS Verify เรื่อง \u0027เมื่อข่าวปลอมดูจริงกว่าความจริง เท่าทันสงครามข้อมูลและอัลกอริทึมในยุค AI\u0027 (https://www.thaipbs.or.th/verify/article/content/6225)\n- ตัวอย่างกรณีศึกษาภาพ/คลิป AI Slop และสื่อที่มีการจัดตั้งกระแส (Astroturfing) ในโซเชียลมีเดีย\n- ใบงานผังความคิด \u0027Algorithmic Awareness \u0026 Information Disorder Worksheet\u0027\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Engage with AI และ Shape AI\n- เครื่องมือประเมินออนไลน์ (Interactive Quiz / Padlet) สำหรับการนำเสนอชิ้นงานและการสะท้อนความคิดเห็น",
-        "title":  "เมื่อข่าวปลอมดูจริงกว่าความจริง เท่าทันสงครามข้อมูลและอัลกอริทึมในยุค AI"
-    },
-    {
-        "id":  "3",
-        "reference":  "https://www.thairath.co.th/lifestyle/tech/2932022",
-        "assessmentTool":  "https://docs.google.com/document/d/1kbndkQvdx24ELjjojeU8NYFGzkIMeofivRj5YzE_Xzw/edit?usp=sharing",
-        "activities":  "กิจกรรม \u0027Generative AI Art \u0026 Intellectual Property: สร้างสรรค์อย่างฉลาด ไม่ละเมิดลิขสิทธิ์\u0027 (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูนำภาพผลงานศิลปะที่สร้างจาก Generative AI (เช่น ภาพสไตล์สตูดิโอจิบลิ ภาพสไตล์ศิลปินชื่อดัง) มาให้นักเรียนดู แล้วชวนคิดว่า \u0027ใครคือเจ้าของลิขสิทธิ์ภาพนี้? AI, ผู้ป้อนคำสั่ง (Prompter) หรือศิลปินต้นฉบับที่ AI ใช้เรียนรู้?\u0027\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มอ่านบทความข้อกฎหมายลิขสิทธิ์ไทยและการใช้ Generative AI สร้างภาพตามกระแส ร่วมกันวิเคราะห์ 3 ประเด็น: (1) สิทธิความเป็นเจ้าของผลงานจาก AI (Human Authorship) (2) การนำผลงานศิลปินไปเทรนโมเดล AI (Training Data Ethics) และ (3) ความเสี่ยงทางกฎหมายจริยธรรมเมื่อนำภาพ AI ไปใช้ในเชิงพาณิชย์หรืออ้างว่าเป็นผลงานตนเอง\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนทดลองเขียนคำสั่งสร้างภาพ (Prompt Design) โดยยึดหลัก \u0027การสร้างสรรค์ร่วมกับ AI อย่างมีจริยธรรม\u0027 (Ethical Human-AI Collaboration) พร้อมจัดทำ \u0027แนวปฏิบัติการอ้างอิงและให้เกียรติลิขสิทธิ์\u0027 (AI Attribution \u0026 Ethics Guideline)\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Create with AI \u0026 Shape AI) เกี่ยวกับบทบาทของมนุษย์ในฐานะผู้ควบคุมการสร้างสรรค์ (Human Agency) และการเคารพสิทธิทรัพย์สินทางปัญญาในยุคดิจิทัล",
-        "assessment":  "- ประเมินสมรรถนะการวิเคราะห์จริยธรรมและลิขสิทธิ์ AI (AI Copyright \u0026 Ethics Rubric): ประเมินความเข้าใจเรื่องสิทธิทรัพย์สินทางปัญญาและการใช้งานที่ชอบธรรม (Fair Use) ผ่านแบบบันทึกการวิเคราะห์กรณีศึกษา\n- ประเมินการสร้างสรรค์และการอ้างอิง (Creative \u0026 Responsible AI Task): ประเมินการออกแบบชิ้นงานสื่อสร้างสรรค์ร่วมกับ AI พร้อมการแสดงข้อความอ้างอิงสิทธิ (Attribution Statement) และคำอธิบายเจตนาการสร้างสรรค์\n- แบบวัดความตระหนักรู้กฎหมายดิจิทัล (Digital Rights \u0026 Generative AI Literacy Quiz): แบบทดสอบปรนัยและสถานการณ์จำลองประเมินการตัดสินใจเชิงจริยธรรมเมื่อใช้เครื่องมือ Generative AI ในชีวิตประจำวันและการเรียน",
-        "materials":  "- บทความข่าวเรื่อง \u0027สรุปชัด! ใช้ AI สร้างรูปตามกระแสโซเชียล เสี่ยงละเมิดลิขสิทธิ์หรือไม่?\u0027 จาก ไทยรัฐออนไลน์ (https://www.thairath.co.th/lifestyle/tech/2932022)\n- ตัวอย่างเปรียบเทียบภาพผลงานศิลปินจริงและภาพผลงานสร้างจาก Generative AI Prompt\n- ใบงานวิเคราะห์กรณีศึกษา \u0027AI Art vs. Copyright \u0026 Ethics Case Study\u0027\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Create with AI (Human Agency \u0026 Intellectual Property)\n- แพลตฟอร์มสร้างสรรค์ภาพ AI แบบเปิดกว้าง (เช่น Canva / Microsoft Designer) สำหรับการทดลองเขียนคำสั่งอย่างมีจริยธรรม",
-        "title":  "สรุปชัด! ใช้ AI สร้างรูปตามกระแสโซเชียล เสี่ยงละเมิดลิขสิทธิ์หรือไม่? เช็กได้ที่นี่"
-    },
-    {
-        "id":  "4",
-        "reference":  "https://www.thaipbs.or.th/verify/news/content/12322",
-        "assessmentTool":  "https://docs.google.com/document/d/1myeTHGBq6Tmhbq7pxzmsFUZjsO743w1Vq_B92uqIwNE/edit?usp=sharing",
-        "activities":  "กิจกรรม \"AI Data Privacy \u0026 Children\u0027s Rights Guard: คุ้มครองข้อมูลเด็ก เท่าทันภัยไซเบอร์และ AI\" (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็น \"ป้อนคำถามหรือการบ้านให้ AI ช่วยทำ เสี่ยงทำข้อมูลส่วนตัวหลุดหรือไม่?\" และชวนนักเรียนอภิปรายประสบการณ์การใช้งานแอปพลิเคชัน AI แชทบอทและโซเชียลมีเดีย\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าว \"PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI\" วิเคราะห์ประเภทข้อมูลส่วนบุคคล (PII) ที่ห้ามป้อนให้ AI (เช่น เลขบัตรประชาชน ภาพถ่าย/ชีวมิติ พฤติกรรมส่วนตัว ที่อยู่ และข้อมูลสุขภาพ) พร้อมจำแนกความเสี่ยงจากการถูก AI นำข้อมูลไปใช้ฝึกโมเดล (AI Data Training) หรือถูกแฮก\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนออกแบบ \"ผังความคุ้มครองข้อมูลเด็กยุค AI\" (Youth AI Privacy Guardian Checklist) และร่วมกันจำลองสถานการณ์การปรับปรุงเงื่อนไขความเป็นส่วนตัว (Privacy Settings) ก่อนใช้งานเครื่องมือ AI\n4. ขั้นสะท้อนคิด (Reflect): สรุปบทเรียนในมิติ PISA 2029 MAIL Literacy (Engage with AI \u0026 Shape AI) เกี่ยวกับสิทธิดิจิทัลของเด็ก (Children\u0027s Digital Rights) และการสร้างภูมิคุ้มกันในการใช้งาน AI อย่างปลอดภัยและรับผิดชอบ",
-        "assessment":  "- ประเมินสมรรถนะการตระหนักรู้ด้านความเป็นส่วนตัวและการคุ้มครองข้อมูลส่วนบุคคล (AI Data Privacy Literacy): ตรวจสอบความถูกต้องของการจำแนกประเภทข้อมูล PII และข้อบกพร่องในเงื่อนไขการใช้งาน AI ผ่านแบบประเมินรูบริก (Rubric)\n- ประเมินผลงานชิ้นงานคู่มือ/เช็กลิสต์ความปลอดภัย (Youth AI Privacy Checklist Assessment): ประเมินการสร้างสรรค์คู่มือและแนวปฏิบัติการใช้งาน AI อย่างปลอดภัยด้วยแบบประเมินการสื่อสารและพลเมืองดิจิทัล\n- แบบวัดความรู้และวิจารณญาณดิจิทัล (PISA 2029 MAIL Data Privacy Quiz): แบบทดสอบประเมินสถานการณ์จำลองเกี่ยวกับการตัดสินใจเปิดเผยหรือปกป้องข้อมูลส่วนบุคคลเมื่อโต้ตอบกับ AI แชทบอท",
-        "materials":  "- บทความข่าวจาก Thai PBS Verify เรื่อง \"PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI\" (https://www.thaipbs.or.th/verify/news/content/12322)\n- สื่อตัวอย่างข้อกำหนดความเป็นส่วนตัว (Terms of Service / Privacy Policy) ของแอปพลิเคชัน AI ที่นิยมในกลุ่มวัยรุ่น\n- ใบงานวิเคราะห์ประเภทข้อมูล \"PII \u0026 AI Risk Mapping Worksheet\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Engage with AI และ Shape AI\n- เครื่องมือประเมินและสะท้อนคิดออนไลน์ (เช่น Canva / Padlet / Kahoot)",
-        "title":  "PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI"
-    },
-    {
-        "id":  "5",
-        "reference":  "https://www.thaipbs.or.th/verify/article/content/2106",
-        "assessmentTool":  "https://docs.google.com/document/d/1glRzHCcv84ur6W-j9S62kIeb4_BiYhBr0_HodRgsaWA/edit?usp=sharing",
-        "activities":  "กิจกรรม \"AI Voice Cloning \u0026 Audio Verification: รู้ทันเทคโนโลยีโคลนเสียง ปกป้องอัตลักษณ์ดิจิทัล\" (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดไฟล์เสียงจริงและไฟล์เสียงสังเคราะห์จาก AI Voice Cloning ที่เลียนเสียงบุคคลคุ้นเคย แล้วให้นักเรียนร่วมกันฟังและวิเคราะห์ว่า \"เสียงไหนคือเสียงจริง เสียงไหนคือ AI? และคิดว่า AI ใช้เวลาสกัดไฟล์เสียงกี่วินาทีเพื่อเลียนแบบเสียงเรา?\"\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าว \"เพียง 30 วินาที ก็ถูกขโมยเสียงได้ รู้ทันภัยใหม่จาก Voice Cloning\" วิเคราะห์เทคโนโลยีคลื่นเสียงอัตโนมัติ (Audio Deepfake) ความเสี่ยงของการโพสต์คลิปเสียง/วิดีโอส่วนตัวบนโซเชียลมีเดีย และรูปแบบกลโกงมิจฉาชีพ (เช่น การปลอมเป็นญาติหลอกโอนเงิน/เรียกค่าไถ่)\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนร่วมกันออกแบบ \"โปรโตคอลความปลอดภัยประจำครอบครัว\" (Family Code Word Protocol) และแนวปฏิบัติการตรวจสอบยืนยันเสียงดิจิทัล (Audio Verification Checklist) เช่น การโทรกลับเบอร์ส่วนตัว การถามคำถามลับเฉพาะ และการชะลอการโอนเงิน\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI \u0026 Engage with AI) ถึงการใช้อัตลักษณ์เสียงอย่างมีความรับผิดชอบ การป้องกันรอยเท้าทางเสียง (Biometric Data Privacy) และการสร้างภูมิคุ้มกันทางเทคโนโลยี",
-        "assessment":  "- ประเมินสมรรถนะการวิเคราะห์สื่อสังเคราะห์เสียง (Audio Deepfake Literacy Assessment): ประเมินความถูกต้องในการแยกแยะข้อบกพร่องทางเทคนิคของ AI Voice Clone และการจำแนกเจตนาของมิจฉาชีพผ่านแบบบันทึกกิจกรรม\n- ประเมินชิ้นงานการออกแบบโปรโตคอลความปลอดภัย (Family Audio Security Protocol Assessment): ประเมินคู่มือและโค้ดลับยืนยันตัวตนในครอบครัวด้วยแบบประเมินรูบริก (Rubric) ด้านการแก้ปัญหาทางเทคโนโลยีและการทำงานร่วมกัน\n- แบบวัดทักษะการตัดสินใจในภาวะวิกฤตดิจิทัล (PISA 2029 MAIL Audio Verification Quiz): แบบทดสอบประเมินสถานการณ์จำลองเมื่อได้รับสายโทรศัพท์ปลอมเสียงจาก AI",
-        "materials":  "- บทความข่าวจาก Thai PBS Verify เรื่อง \"เพียง 30 วินาที ก็ถูกขโมยเสียงได้ รู้ทันภัยใหม่จาก Voice Cloning\" (https://www.thaipbs.or.th/verify/article/content/2106)\n- สื่อตัวอย่างไฟล์เสียงเปรียบเทียบ (Real Voice vs. AI Voice Clone Samples)\n- ใบงานวิเคราะห์ภัยไซเบอร์ \"Audio Biometric Privacy \u0026 Verification Worksheet\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Manage AI และ Engage with AI\n- แพลตฟอร์ม interactive (เช่น Canva / Padlet / Kahoot) สำหรับการสรุปและประเมินผล",
-        "title":  "เพียง 30 วินาที ก็ถูกขโมยเสียงได้ รู้ทันภัยใหม่จาก Voice Cloning"
-    },
-    {
-        "id":  "6",
-        "reference":  "https://news.ch7.com/detail/888022",
-        "assessmentTool":  "https://docs.google.com/document/d/1RhNp1Jcf2UZCU3Jl45nphZfLUgHxIYwbDPaeSh2ku6o/edit?usp=sharing",
-        "activities":  "กิจกรรม \"AI Homework Helper vs. Critical Mind: ใช้ AI ช่วยเรียนอย่างมีจริยธรรม ไม่ทำลายทักษะการคิด\" (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดผลสำรวจ \"เด็กไทยกว่า 94% เคยใช้ AI ช่วยทำการบ้าน\" แล้วให้นักเรียนร่วมกันสะท้อนพฤติกรรมตนเองว่า \"การใช้ AI ช่วยทำการบ้าน คือ \u0027เครื่องมือช่วยเรียน\u0027 หรือ \u0027ทางลัดหลีกเลี่ยงการคิด\u0027?\"\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าวเรื่องผลกระทบของการใช้ AI ทำการบ้านต่อทักษะการคิดวิเคราะห์ (Metacognitive Laziness) ร่วมกันวิเคราะห์ 3 ประเด็น: (1) ความแตกต่างระหว่างการป้อนคำสั่งให้ AI คิดแทน 100% กับการใช้ AI เป็นโค้ชการเรียนรู้ (2) ข้อผิดพลาดของข้อมูลจาก AI (AI Hallucination) และ (3) ผลกระทบระยะยาวต่อสมรรถนะการแก้ปัญหา\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนทดลองออกแบบ \"คู่มือการใช้ AI ช่วยเรียนอย่างมีจริยธรรม\" (Ethical AI Homework Companion Guide) และฝึกทักษะการตรวจสอบความถูกต้องของคำตอบจาก AI ด้วยการค้นคว้าอ้างอิงจากแหล่งข้อมูลจริง (Fact-Checking Protocol)\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI \u0026 Create with AI) ถึงการรักษาอำนาจการตัดสินใจของมนุษย์ (Human Agency) และการสร้างวัฒนธรรมความซื่อสัตย์ทางวิชาการ (Academic Integrity)",
-        "assessment":  "- ประเมินสมรรถนะการวิเคราะห์ความน่าเชื่อถือของผลลัพธ์จาก AI (AI Output Verification Assessment): ประเมินความสามารถในการจับผิดข้อมูลบิดเบือนหรือข้อผิดพลาด (Hallucination) จากคำตอบของ AI ผ่านใบงาน Fact-Checking\n- ประเมินชิ้นงานคู่มือการใช้งาน AI อย่างมีจริยธรรม (Ethical AI Usage Guide Assessment): ประเมินการจัดทำแนวทางการใช้ AI ช่วยเรียนด้วยแบบประเมินรูบริก (Rubric) ด้านความซื่อสัตย์ทางวิชาการและการคิดเชิงวิพากษ์\n- แบบวัดทักษะการกำกับตนเองในการเรียนรู้ยุค AI (PISA 2029 MAIL Academic Integrity \u0026 Self-Regulation Quiz): แบบทดสอบประเมินสถานการณ์จำลองเมื่อต้องใช้เครื่องมือ Generative AI ในการทำรายงานและการบ้าน",
-        "materials":  "- บทความข่าวจาก Ch7 News เรื่อง \"เด็กไทยใช้ AI ช่วยทำการบ้าน ขาดการคิดวิเคราะห์\" (https://news.ch7.com/detail/888022)\n- ตัวอย่างเปรียบเทียบคำตอบการบ้านที่สร้างจาก AI vs. ผลงานการคิดวิเคราะห์ด้วยตนเองของนักเรียน\n- ใบงานวิเคราะห์ข้อมูลและจับผิด AI \"AI Answer Verification \u0026 Fact-Checking Sheet\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Manage AI และ Create with AI\n- แพลตฟอร์มสะท้อนคิดและประเมินผลออนไลน์ (เช่น Padlet / Google Forms / Kahoot)",
-        "title":  "เด็กไทยใช้ AI ช่วยทำการบ้าน ขาดการคิดวิเคราะห์ - ผลสำรวจเตือนภัยทักษะการเรียนรู้ถดถอย"
-    },
-    {
-        "id":  "7",
-        "reference":  "https://www.pptvhd36.com/news/%E0%B8%AA%E0%B8%B1%E0%B8%87%E0%B8%84%E0%B8%A1/250101",
-        "assessmentTool":  "https://docs.google.com/document/d/1ACR9BPCR9EzdttcWXMkdB1cSx9ze9qcp0yVonKyTFcs/edit?usp=sharing",
-        "activities":  "กิจกรรม \"Non-Consensual AI Media \u0026 Digital Citizenship: ยุติการใช้ AI คุกคามและสร้างภูมิคุ้มกันไซเบอร์บูลลี่\" (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูนำเสนอข่าวการตัดต่อภาพตัดต่อด้วย AI (Non-Consensual Deepfake) ในกลุ่มนักเรียน แล้วชวนอภิปรายว่า \"การใช้ AI ดัดแปลงภาพคนอื่นโดยไม่ได้รับอนุญาตถือเป็นเรื่องตลกหรือเป็นอาชญากรรมทางไซเบอร์?\"\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าวกรณีการใช้ AI ตัดต่อภาพอนาจารเพื่อนร่วมชั้น ร่วมกันวิเคราะห์ 3 ประเด็นหลัก: (1) การละเมิดสิทธิในรูปภาพและร่างกาย (Consent \u0026 Image Rights) (2) กฎหมายว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์และอาชญากรรมไซเบอร์ และ (3) ผลกระทบทางจิตใจและสังคมต่อผู้ตกเป็นเหยื่อ\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนร่วมกันสร้าง \"ข้อตกลงร่วมการใช้สื่อ AI อย่างเคารพสิทธิ\" (School AI Ethical Agreement) และวางแนวทางการรับมือเมื่อตนเองหรือเพื่อนถูกคุกคามด้วยสื่อ AI (Report \u0026 Support Protocol) เช่น การแคปหน้าจอหลักฐาน การแจ้งครู/ผู้ปกครอง และการร้องเรียนศูนย์ต่อต้านอาชญากรรมออนไลน์\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Shape AI \u0026 Engage with AI) เกี่ยวกับการเป็นพลเมืองดิจิทัลที่มีความรับผิดชอบ (Responsible Digital Citizen) และการร่วมสร้างสังคมออนไลน์ที่ปลอดภัย",
-        "assessment":  "- ประเมินสมรรถนะการตระหนักรู้กฎหมายและสิทธิดิจิทัล (Digital Rights \u0026 AI Law Literacy Assessment): ประเมินความเข้าใจเรื่องสิทธิในภาพถ่าย ข้อกฎหมายไซเบอร์ และจริยธรรมการใช้งาน AI ผ่านการวิเคราะห์กรณีศึกษา\n- ประเมินชิ้นงานข้อตกลงและแนวทางการรับมือภัยไซเบอร์ (Anti-Deepfake Harassment Protocol Assessment): ประเมินการออกแบบคู่มือ/ข้อตกลงการป้องกันการคุกคามทางไซเบอร์ด้วยแบบประเมินรูบริก (Rubric) ด้านจริยธรรมและการแก้ปัญหา\n- แบบวัดทักษะการเป็นพลเมืองดิจิทัลและการตัดสินใจเชิงจริยธรรม (PISA 2029 MAIL Digital Citizenship Quiz): แบบทดสอบประเมินสถานการณ์จำลองเกี่ยวกับการรับมือและการหยุดส่งต่อสื่อ AI ที่ละเมิดสิทธิผู้อื่น",
-        "materials":  "- บทความข่าวจาก PPTV HD36 เรื่อง \"แจ้ง ตร.ไซเบอร์เอาผิดเพื่อนนักเรียนใช้ AI ตัดต่อภาพอนาจาร\" (https://www.pptvhd36.com/news/สังคม/250101)\n- ตัวอย่างสื่ออินโฟกราฟิกกฎหมาย พ.ร.บ.คอมพิวเตอร์ และการรับมือภัย Cyberbullying\n- ใบงานวิเคราะห์กรณีศึกษา \"AI Image Generation \u0026 Consent Case Study\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Shape AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิดและจัดทำข้อตกลงออนไลน์ (เช่น Padlet / Canva / Mentimeter)",
-        "title":  "แจ้ง ตร.ไซเบอร์เอาผิดกรณีเพื่อนนักเรียนใช้ AI ตัดต่อภาพอนาจารและเผยแพร่ลงโซเชียล"
-    },
-    {
-        "id":  "8",
-        "reference":  "https://www.thaipbs.or.th/now/content/3327",
-        "assessmentTool":  "https://docs.google.com/document/d/11DVRXMFv1cspxtd1aDKnmGv0QQf0IxJyBEA1vs0UReQ/edit?usp=sharing",
-        "activities":  "กิจกรรม \"AI Companion \u0026 Digital Emotional Well-being: เมื่อ AI กลายเป็นเพื่อนคุย รู้เท่าทันการพึ่งพาทางอารมณ์อย่างปลอดภัย\" (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็น \"เมื่อเหงา ท้อแท้ หรือมีปัญหาใจ เคยลองระบายกับ AI Chatbot หรือไม่? และ AI ให้คำตอบที่เข้าใจเราจริงหรือแค่ประมวลผลตามอัลกอริทึม?\"\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าว \"ปรึกษาปัญหาใจกับ AI Chatbot อาจไม่ปลอดภัยอย่างที่คิด\" ร่วมกันวิเคราะห์ 3 ประเด็น: (1) กลไกของ Generative AI Chatbot ในการเลียนแบบความรู้สึกและสร้างความผูกพันทางอารมณ์ (Parasocial Interaction) (2) ความเสี่ยงของการได้รับคำแนะนำที่ผิดพลาดทางสุขภาพจิต (Lack of Clinical Judgement) และ (3) ข้อจำกัดเรื่องการคุ้มครองข้อมูลความลับส่วนบุคคล (Privacy Risks)\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนทดลองออกแบบ \"คู่มือการใช้ AI Chatbot อย่างมีขอบเขตและปลอดภัย\" (Boundaries \u0026 Ethical Guidelines for AI Chatbots) พร้อมสร้างผังจำลองการขอความช่วยเหลือเมื่อเผชิญวิกฤตทางอารมณ์ (Human Connection \u0026 Mental Health Support Network)\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI \u0026 Engage with AI) ถึงการรักษาสมดุลระหว่างการใช้เทคโนโลยีกับการสร้างสัมพันธภาพที่แท้จริงในโลกจริง (Human-to-Human Connection)",
-        "assessment":  "- ประเมินสมรรถนะการตระหนักรู้ข้อจำกัดและขอบเขตของ AI Chatbot (AI Emotional Companion Boundaries Assessment): ประเมินความเข้าใจเรื่องข้อจำกัดด้านความรู้สึก การประมวลผลเชิงอัลกอริทึม และความเสี่ยงทางสุขภาพจิตผ่านแบบบันทึกกิจกรรม\n- ประเมินชิ้นงานคู่มือการใช้งาน AI อย่างมีขอบเขต (Ethical AI Chatbot Guidelines Assessment): ประเมินการออกแบบคู่มือและผังเครือข่ายความช่วยเหลือด้วยแบบประเมินรูบริก (Rubric) ด้านสุขภาวะดิจิทัลและการแก้ปัญหา\n- แบบวัดทักษะการตัดสินใจและการดูแลสุขภาวะจิตใจยุคดิจิทัล (PISA 2029 MAIL Emotional Well-being \u0026 AI Quiz): แบบทดสอบประเมินสถานการณ์จำลองเกี่ยวกับการรับมือเมื่อเผชิญสภาวะอารมณ์และการโต้ตอบกับ AI Chatbot",
-        "materials":  "- บทความข่าวจาก Thai PBS NOW เรื่อง \"ปรึกษาปัญหาใจกับ AI Chatbot อาจไม่ปลอดภัยอย่างที่คิด\" (https://www.thaipbs.or.th/now/content/3327)\n- ตัวอย่างบทสนทนาเปรียบเทียบระหว่าง AI Chatbot กับผู้เชี่ยวชาญด้านสุขภาพจิต/สายด่วนปรึกษาปัญหา\n- ใบงานวิเคราะห์ความเสี่ยงและขอบเขต \"AI Chatbot Boundaries \u0026 Mental Health Worksheet\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Manage AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิดและจัดทำชิ้นงานออนไลน์ (เช่น Padlet / Canva / Kahoot)",
-        "title":  "ปรึกษาปัญหาใจกับ AI Chatbot อาจไม่ปลอดภัยอย่างที่คิด - รู้เท่าทันการพึ่งพาทางอารมณ์และสุขภาวะจิตดิจิทัล"
-    },
-    {
-        "id":  "9",
-        "reference":  "https://www.thaipbs.or.th/verify/article/content/14657",
-        "assessmentTool":  "https://docs.google.com/document/d/1PWUkdosef3J618WiYA7uzctasGwmW1S24n_0Rz-zfz0/edit?usp=sharing",
-        "activities":  "กิจกรรม \"Ultra Smooth AI Scams \u0026 Digital Financial Literacy: ส่องความเนียนสแกมเมอร์ยุค AI และการสร้างภูมิคุ้มกันทางการเงินดิจิทัล\" (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดตัวอย่างคลิปวิดีโอ/โฆษณาชวนลงทุนสแกมยุค AI ที่ใช้รูป เสียง และบทสนทนาเนียนระดับ \"Ultra Smooth\" แล้วให้นักเรียนร่วมกันตั้งข้อสังเกตว่า \"มิจฉาชีพยุคใหม่ใช้ AI ทำอย่างไรถึงหลอกคนให้เชื่อได้อย่างแนบเนียน?\"\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าว \"ส่องความเนียนระดับ Ultra Smooth ของมิจฉาชีพยุค AI\" ร่วมกันวิเคราะห์ 3 เทคนิคกลโกง: (1) การใช้ Deepfake ปลอมตัวเป็นคนดัง/เจ้าหน้าที่ (2) การยิงโฆษณาลิงก์ปลอมและเว็บทิพย์ (Fake Websites \u0026 Phishing Links) และ (3) การใช้ AI บทสนทนาปั่นหัวเร่งรัดให้โอนเงิน (High-Pressure Tactics)\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนร่วมกันออกแบบ \"คู่มือสแกนภัยสแกมเมอร์ AI\" (AI Scam Detection \u0026 Fact-Checking Guide) และจำลองสถานการณ์การตรวจสอบลิงก์/บัญชีปลอม (Phishing Link Verification Protocol) ก่อนคลิกหรือโอนเงิน\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI \u0026 Engage with AI) ถึงการไม่ด่วนตัดสินใจเพียงเพราะเห็นภาพหรือเสียงสมจริง (Do Not Trust at First Sight) และการสร้างภูมิคุ้มกันความปลอดภัยทางการเงินดิจิทัล",
-        "assessment":  "- ประเมินสมรรถนะการตรวจสอบกลโกงสแกมเมอร์ AI (AI Scam Detection Assessment): ประเมินความสามารถในการสังเกตจุดผิดปกติของ Deepfake ภาพ/เสียง และการจำแนกเว็บปลอมPhishing ผ่านแบบบันทึกกิจกรรม\n- ประเมินชิ้นงานคู่มือสแกนภัยสแกมเมอร์ AI (Phishing \u0026 Deepfake Prevention Protocol Assessment): ประเมินการออกแบบคู่มือตรวจสอบความปลอดภัยทางการเงินดิจิทัลด้วยแบบประเมินรูบริก (Rubric) ด้านการคิดเชิงวิพากษ์และการแก้ปัญหา\n- แบบวัดทักษะการตัดสินใจในภาวะเสี่ยงภัยไซเบอร์ (PISA 2029 MAIL Digital Scam \u0026 Financial Security Quiz): แบบทดสอบประเมินสถานการณ์จำลองเมื่อพบโฆษณาชวนลงทุนหรือข้อความเร่งรัดโอนเงินจากมิจฉาชีพ AI",
-        "materials":  "- บทความข่าวจาก Thai PBS Verify เรื่อง \"ส่องความเนียนระดับ Ultra Smooth ของมิจฉาชีพยุค AI หลอกอย่างไรให้เหยื่อหลงเชื่อโดยไม่รู้ตัว\" (https://www.thaipbs.or.th/verify/article/content/14657)\n- ตัวอย่างเปรียบเทียบเว็บไซต์จริง vs. เว็บไซต์ปลอม Phishing Link ของมิจฉาชีพ\n- ใบงานวิเคราะห์กลโกงและเช็กลิสต์ความปลอดภัย \"Ultra Smooth AI Scam Analysis Worksheet\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Manage AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิดและจัดทำชิ้นงานออนไลน์ (เช่น Padlet / Canva / Kahoot)",
-        "title":  "ส่องความเนียนระดับ Ultra Smooth ของมิจฉาชีพยุค AI หลอกอย่างไรให้เหยื่อหลงเชื่อโดยไม่รู้ตัว"
-    },
-    {
-        "id":  "10",
-        "reference":  "https://www.thaipbs.or.th/news/content/506729",
-        "assessmentTool":  "https://docs.google.com/document/d/136XbVmTbBNhJW7hqcucGsUinfMDWgymRl4Ox5i14bT0/edit?usp=sharing",
-        "activities":  "กิจกรรม \u0027AI \u0026 Future Skills: ปรับตัวและเรียนรู้ร่วมกับ AI อย่างทรงพลัง\u0027 (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็นผลสำรวจสภาพัฒน์ฯ \"AI เสี่ยงเข้ามารองรับและแทนที่แรงงานไทย 2.2 ล้านคน\" แล้วให้นักเรียนร่วมกันอภิปรายว่า \"อาชีพใดบ้างที่ AI ทำแทนได้ และทักษะใดของมนุษย์ที่ AI ยังไม่สามารถแทนที่ได้?\"\n2. ขั้นสำรวจและวิเคราะห์ (Explore \u0026 Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าวการเข้าถึงเทคโนโลยี AI ในตลาดแรงงาน ร่วมกันวิเคราะห์ 3 ประเด็นหลัก: (1) ความแตกต่างระหว่างการใช้ AI ทำแทน 100% กับการใช้ AI เป็นผู้ช่วยเพิ่มประสิทธิภาพ (Human-AI Collaboration) (2) ทักษะเฉพาะของมนุษย์ที่ AI ไม่มี (เช่น ความเห็นอกเห็นใจ จริยธรรม การคิดเชิงวิพากษ์ และการแก้ปัญหาซับซ้อน) และ (3) แนวทางการพัฒนาตนเอง (Upskill \u0026 Reskill) ของเยาวชนเพื่อรับมือกับโลกอนาคต\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create \u0026 Manage): นักเรียนทดลองสวมบทบาทเป็น \"ที่ปรึกษาการพัฒนาอาชีพยุค AI\" ออกแบบ \u0027ผังสมรรถนะมนุษย์ยุค AI\u0027 (Human Competency Map for AI Era) และจัดทำอินโฟกราฟิกแนะนำ \u0027ทักษะที่ต้อง Upskill เพื่อเรียนรู้ร่วมกับ AI อย่างเท่าทัน\u0027\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันอภิปรายสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI, Create with AI \u0026 Engage sequence with AI) ถึงการรักษาอำนาจการตัดสินใจของมนุษย์ (Human Agency) และการวางแผนการเรียนรู้ตลอดชีวิต (Lifelong Learning)",
-        "assessment":  "- ประเมินสมรรถนะการวิเคราะห์ผลกระทบของ AI ต่อสังคมและแรงงาน (AI Labor \u0026 Social Impact Assessment): ประเมินความเข้าใจเรื่องข้อจำกัดของ AI และทักษะเฉพาะของมนุษย์ผ่านแบบบันทึกกิจกรรมและการวิเคราะห์กรณีศึกษา\n- ประเมินชิ้นงานการออกแบบผังสมรรถนะและการปรับตัว (Future Skill Mapping \u0026 Upskilling Plan Rubric): ประเมินการจัดทำแนวทางการ Upskill ตนเองและการใช้ AI เพิ่มประสิทธิภาพการเรียนรู้ด้วยแบบประเมินรูบริกด้านการคิดเชิงวิพากษ์และการปรับตัว\n- แบบวัดทักษะการเป็นพลเมืองดิจิทัลและการวางแผนการเรียนรู้ยุค AI (PISA 2029 MAIL Future Skills Quiz): แบบทดสอบประเมินสถานการณ์จำลองเกี่ยวกับการตัดสินใจเลือกใช้เครื่องมือ AI ในการทำงานและการศึกษาอย่างรับผิดชอบ",
-        "materials":  "- บทความข่าวจาก Thai PBS เรื่อง \u0027\"AI\" เขย่าตลาดแรงงาน สภาพัฒน์ฯเตือนคนไทย 2.2 ล้านคน \"เสี่ยงตกงาน\"\u0027 (https://www.thaipbs.or.th/news/content/506729)\n- ตัวอย่างกรณีศึกษาการประยุกต์ใช้ AI ในอาชีพต่างๆ (เช่น การใช้ AI ช่วยวิเคราะห์ข้อมูล งานออกแบบ งานเขียน)\n- ใบงานวิเคราะห์ทักษะมนุษย์ vs AI \"Human-AI Competency Mapping Worksheet\"\n- สไลด์นำเสนอความรู้เรื่องกรอบ PISA 2029 MAIL Literacy โดเมน Manage AI, Create with AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิดและจัดทำชิ้นงานออนไลน์ (เช่น Canva / Padlet / Kahoot)",
-        "title":  "\"AI\" เขย่าตลาดแรงงาน สภาพัฒน์ฯเตือนคนไทย 2.2 ล้านคน \"เสี่ยงตกงาน\" - รู้เท่าทันการปรับตัวและพัฒนาสมรรถนะยุค AI"
-    }
+  {
+    "id": "1",
+    "title": "เตือนภัย Deepfake ปลอมเป็นผู้นำและผู้บริหาร หลอกโอนเงินผ่าน Zoom และสื่อสังเคราะห์",
+    "reference": "https://www.thaipbs.or.th/verify/article/content/14211",
+    "assessmentTool": "https://docs.google.com/document/d/1k_dNo7BSW6VDSSIL1BW9PSoVbPJ_WIaM1mz8bFvSJag/edit?usp=sharing",
+    "activities": "กิจกรรม 'Spot the Fake: จับโป๊ะ AI Deepfake และสแกมเมอร์ไซเบอร์' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดคลิปวิดีโอ/ภาพเปรียบเทียบระหว่างบุคคลจริงกับภาพ Deepfake ที่สร้างโดย AI แล้วให้นักเรียนร่วมกันตั้งคำถามว่า 'ภาพ/เสียงนี้เป็นของจริงหรือไม่? รู้ได้อย่างไร?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าวการใช้ AI Deepfake ปลอมแปลงหน้าและเสียง ร่วมกันวิเคราะห์ 3 ด้าน ได้แก่ (1) ข้อบกพร่องทางเทคนิคของ AI (2) เจตนาของผู้สร้าง (Intent) และ (3) ผลกระทบทางสังคมและจริยธรรม\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'คู่มือเช็กลิสต์การตรวจสอบ AI Deepfake' และร่วมกันสร้างสถานการณ์จำลอง (Role-play) การยืนยันตัวตน\n4. ขั้นสะท้อนคิด (Reflect): สรุปบทเรียนในมิติ PISA 2029 MAIL Literacy เกี่ยวกับความรับผิดชอบและการคิดวิจารณญาณ",
+    "assessment": "- ประเมินสมรรถนะการวิเคราะห์สื่อสังเคราะห์ (Synthetic Media Analysis)\n- ประเมินการปฏิบัติในสถานการณ์จำลอง (Role-play Assessment)\n- แบบวัดการรู้เท่าทันสื่อและปัญญาประดิษฐ์ (MAIL Literacy Quiz)",
+    "materials": "- บทความข่าวเตือนภัย Deepfake จาก Thai PBS Verify\n- ตัวอย่างสื่อสังเคราะห์ (Deepfake Video & Voice Clips)\n- ใบงานวิเคราะห์องค์ประกอบข่าวสารและเจตนาของสื่อ AI\n- สไลด์นำเสนอความรู้เรื่องกรอบแนวคิด PISA 2029 MAIL Literacy\n- แพลตฟอร์มดิจิทัล interactive (เช่น Kahoot / Padlet)"
+  },
+  {
+    "id": "2",
+    "title": "เมื่อข่าวปลอมดูจริงกว่าความจริง เท่าทันสงครามข้อมูลและอัลกอริทึมในยุค AI",
+    "reference": "https://www.thaipbs.or.th/verify/article/content/6225",
+    "assessmentTool": "https://docs.google.com/document/d/1r0Z46fwsBv_HWAihxDiDromiiAP7HvFrmBetSILULP4/edit?usp=sharing",
+    "activities": "กิจกรรม 'Decoder of Algorithmic Echo Chamber & AI Slop: ถอดรหัสอัลกอริทึมและขยะดิจิทัล' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูให้นักเรียนเปรียบเทียบหน้าฟีดโซเชียลมีเดียของตนเอง แล้วร่วมกันอภิปรายว่า 'ทำไมเนื้อหาที่ระบบแนะนำให้เราแต่ละคนจึงไม่เหมือนกัน?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนอ่านบทความข่าวเรื่องสงครามข้อมูลและอัลกอริทึม วิเคราะห์การทำงานของ Filter Bubbles และ AI Slop\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'แผนผังผดุงจริยธรรมอัลกอริทึม' และอินโฟกราฟิกแนะนำวิธีฝึกอัลกอริทึมให้ฉลาด\n4. ขั้นสะท้อนคิด (Reflect): อภิปรายในมิติ PISA 2029 MAIL Literacy (Shape AI & Engage with AI) ถึงบทบาทของเยาวชนในการลดมลพิษดิจิทัล",
+    "assessment": "- ประเมินสมรรถนะการรู้เท่าทันอัลกอริทึม (Algorithmic Literacy Assessment)\n- ประเมินผลงานการออกแบบ (Creative & Solution-Based Assessment)\n- แบบวัดทักษะการตั้งคำถามเชิงวิพากษ์ (PISA 2029 MAIL Critical Questions Quiz)",
+    "materials": "- บทความข่าวจาก Thai PBS Verify เรื่อง 'เมื่อข่าวปลอมดูจริงกว่าความจริง'\n- ตัวอย่างกรณีศึกษาภาพ/คลิป AI Slop และสื่อที่มีการจัดตั้งกระแส\n- ใบงานผังความคิด 'Algorithmic Awareness & Information Disorder Worksheet'\n- สไลด์นำเสนอกรอบ PISA 2029 MAIL Literacy โดเมน Engage with AI และ Shape AI\n- เครื่องมือประเมินออนไลน์ (Interactive Quiz / Padlet)"
+  },
+  {
+    "id": "3",
+    "title": "สรุปชัด! ใช้ AI สร้างรูปตามกระแสโซเชียล เสี่ยงละเมิดลิขสิทธิ์หรือไม่? เช็กได้ที่นี่",
+    "reference": "https://www.thairath.co.th/lifestyle/tech/2932022",
+    "assessmentTool": "https://docs.google.com/document/d/1kbndkQvdx24ELjjojeU8NYFGzkIMeofivRj5YzE_Xzw/edit?usp=sharing",
+    "activities": "กิจกรรม 'Generative AI Art & Intellectual Property: สร้างสรรค์อย่างฉลาด ไม่ละเมิดลิขสิทธิ์' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูนำภาพผลงานศิลปะที่สร้างจาก Generative AI มาให้นักเรียนดู แล้วชวนคิดว่า 'ใครคือเจ้าของลิขสิทธิ์ภาพนี้?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนอ่านบทความข้อกฎหมายลิขสิทธิ์ไทยและการใช้ Generative AI วิเคราะห์สิทธิความเป็นเจ้าของ Training Data Ethics และความเสี่ยงทางกฎหมาย\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนทดลองเขียนคำสั่งสร้างภาพ (Prompt Design) โดยยึดหลักจริยธรรม พร้อมจัดทำ 'แนวปฏิบัติการอ้างอิงและให้เกียรติลิขสิทธิ์'\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Create with AI & Shape AI)",
+    "assessment": "- ประเมินสมรรถนะการวิเคราะห์จริยธรรมและลิขสิทธิ์ AI (AI Copyright & Ethics Rubric)\n- ประเมินการสร้างสรรค์และการอ้างอิง (Creative & Responsible AI Task)\n- แบบวัดความตระหนักรู้กฎหมายดิจิทัล (Digital Rights & Generative AI Literacy Quiz)",
+    "materials": "- บทความข่าวเรื่อง 'สรุปชัด! ใช้ AI สร้างรูปตามกระแสโซเชียล' จาก ไทยรัฐออนไลน์\n- ตัวอย่างเปรียบเทียบภาพผลงานศิลปินจริงและภาพสร้างจาก Generative AI\n- ใบงานวิเคราะห์กรณีศึกษา 'AI Art vs. Copyright & Ethics Case Study'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Create with AI\n- แพลตฟอร์มสร้างสรรค์ภาพ AI (เช่น Canva / Microsoft Designer)"
+  },
+  {
+    "id": "4",
+    "title": "PDPC จับมือ UNICEF วางมาตรการป้องกันข้อมูลเด็กหลุด รับมือภัยไซเบอร์และ AI",
+    "reference": "https://www.thaipbs.or.th/verify/news/content/12322",
+    "assessmentTool": "https://docs.google.com/document/d/1myeTHGBq6Tmhbq7pxzmsFUZjsO743w1Vq_B92uqIwNE/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI Data Privacy & Children's Rights Guard: คุ้มครองข้อมูลเด็ก เท่าทันภัยไซเบอร์และ AI' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็น 'ป้อนคำถามหรือการบ้านให้ AI ช่วยทำ เสี่ยงทำข้อมูลส่วนตัวหลุดหรือไม่?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนศึกษาบทความข่าว PDPC จับมือ UNICEF วิเคราะห์ประเภทข้อมูล PII ที่ห้ามป้อนให้ AI และความเสี่ยงการนำไปใช้ฝึกโมเดล\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'ผังความคุ้มครองข้อมูลเด็กยุค AI' (Youth AI Privacy Guardian Checklist)\n4. ขั้นสะท้อนคิด (Reflect): สรุปบทเรียนในมิติ PISA 2029 MAIL Literacy (Engage with AI & Shape AI) เกี่ยวกับสิทธิดิจิทัลของเด็ก",
+    "assessment": "- ประเมินสมรรถนะการตระหนักรู้ด้านความเป็นส่วนตัว (AI Data Privacy Literacy)\n- ประเมินผลงานชิ้นงานคู่มือ/เช็กลิสต์ความปลอดภัย (Youth AI Privacy Checklist Assessment)\n- แบบวัดความรู้และวิจารณญาณดิจิทัล (PISA 2029 MAIL Data Privacy Quiz)",
+    "materials": "- บทความข่าวจาก Thai PBS Verify เรื่อง 'PDPC จับมือ UNICEF'\n- สื่อตัวอย่างข้อกำหนดความเป็นส่วนตัว (Privacy Policy) ของแอปพลิเคชัน AI\n- ใบงานวิเคราะห์ประเภทข้อมูล 'PII & AI Risk Mapping Worksheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Engage with AI และ Shape AI\n- เครื่องมือประเมินออนไลน์ (เช่น Canva / Padlet / Kahoot)"
+  },
+  {
+    "id": "5",
+    "title": "เพียง 30 วินาที ก็ถูกขโมยเสียงได้ รู้ทันภัยใหม่จาก Voice Cloning",
+    "reference": "https://www.thaipbs.or.th/verify/article/content/2106",
+    "assessmentTool": "https://docs.google.com/document/d/1glRzHCcv84ur6W-j9S62kIeb4_BiYhBr0_HodRgsaWA/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI Voice Cloning & Audio Verification: รู้ทันเทคโนโลยีโคลนเสียง ปกป้องอัตลักษณ์ดิจิทัล' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดไฟล์เสียงจริงและไฟล์เสียงสังเคราะห์จาก AI Voice Cloning แล้วให้นักเรียนวิเคราะห์ว่า 'เสียงไหนคือเสียงจริง?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนศึกษาบทความข่าว 'เพียง 30 วินาที ก็ถูกขโมยเสียงได้' วิเคราะห์เทคโนโลยี Audio Deepfake และรูปแบบกลโกงมิจฉาชีพ\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'โปรโตคอลความปลอดภัยประจำครอบครัว' (Family Code Word Protocol)\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI & Engage with AI) ถึงการปกป้อง Biometric Data Privacy",
+    "assessment": "- ประเมินสมรรถนะการวิเคราะห์สื่อสังเคราะห์เสียง (Audio Deepfake Literacy Assessment)\n- ประเมินชิ้นงานการออกแบบโปรโตคอลความปลอดภัย (Family Audio Security Protocol)\n- แบบวัดทักษะการตัดสินใจในภาวะวิกฤตดิจิทัล (PISA 2029 MAIL Audio Verification Quiz)",
+    "materials": "- บทความข่าวจาก Thai PBS Verify เรื่อง 'เพียง 30 วินาที ก็ถูกขโมยเสียงได้'\n- สื่อตัวอย่างไฟล์เสียงเปรียบเทียบ (Real Voice vs. AI Voice Clone Samples)\n- ใบงานวิเคราะห์ภัยไซเบอร์ 'Audio Biometric Privacy & Verification Worksheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Manage AI และ Engage with AI\n- แพลตฟอร์ม interactive (เช่น Canva / Padlet / Kahoot)"
+  },
+  {
+    "id": "6",
+    "title": "เด็กไทยใช้ AI ช่วยทำการบ้าน ขาดการคิดวิเคราะห์ - ผลสำรวจเตือนภัยทักษะการเรียนรู้ถดถอย",
+    "reference": "https://news.ch7.com/detail/888022",
+    "assessmentTool": "https://docs.google.com/document/d/1RhNp1Jcf2UZCU3Jl45nphZfLUgHxIYwbDPaeSh2ku6o/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI Homework Helper vs. Critical Mind: ใช้ AI ช่วยเรียนอย่างมีจริยธรรม ไม่ทำลายทักษะการคิด' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดผลสำรวจ 'เด็กไทยกว่า 94% เคยใช้ AI ช่วยทำการบ้าน' แล้วให้นักเรียนสะท้อนพฤติกรรมตนเอง\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนวิเคราะห์ผลกระทบของการใช้ AI ทำการบ้านต่อทักษะการคิดวิเคราะห์ (Metacognitive Laziness) และ AI Hallucination\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'คู่มือการใช้ AI ช่วยเรียนอย่างมีจริยธรรม' และฝึกทักษะ Fact-Checking\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI & Create with AI) ถึงการรักษา Human Agency",
+    "assessment": "- ประเมินสมรรถนะการวิเคราะห์ความน่าเชื่อถือของผลลัพธ์จาก AI (AI Output Verification)\n- ประเมินชิ้นงานคู่มือการใช้งาน AI อย่างมีจริยธรรม (Ethical AI Usage Guide)\n- แบบวัดทักษะการกำกับตนเองในการเรียนรู้ยุค AI (Academic Integrity & Self-Regulation Quiz)",
+    "materials": "- บทความข่าวจาก Ch7 News เรื่อง 'เด็กไทยใช้ AI ช่วยทำการบ้าน ขาดการคิดวิเคราะห์'\n- ตัวอย่างเปรียบเทียบคำตอบจาก AI vs. ผลงานการคิดวิเคราะห์ด้วยตนเอง\n- ใบงานวิเคราะห์ข้อมูลและจับผิด AI 'AI Answer Verification & Fact-Checking Sheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Manage AI และ Create with AI\n- แพลตฟอร์มสะท้อนคิดออนไลน์ (เช่น Padlet / Google Forms / Kahoot)"
+  },
+  {
+    "id": "7",
+    "title": "แจ้ง ตร.ไซเบอร์เอาผิดกรณีเพื่อนนักเรียนใช้ AI ตัดต่อภาพอนาจารและเผยแพร่ลงโซเชียล",
+    "reference": "https://www.pptvhd36.com/news/%E0%B8%AA%E0%B8%B1%E0%B8%87%E0%B8%84%E0%B8%A1/250101",
+    "assessmentTool": "https://docs.google.com/document/d/1ACR9BPCR9EzdttcWXMkdB1cSx9ze9qcp0yVonKyTFcs/edit?usp=sharing",
+    "activities": "กิจกรรม 'Non-Consensual AI Media & Digital Citizenship: ยุติการใช้ AI คุกคามและสร้างภูมิคุ้มกันไซเบอร์บูลลี่' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูนำเสนอข่าวการตัดต่อภาพด้วย AI (Non-Consensual Deepfake) แล้วชวนอภิปรายว่า 'การใช้ AI ดัดแปลงภาพคนอื่นโดยไม่ได้รับอนุญาตถือเป็นอาชญากรรมไซเบอร์หรือไม่?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนวิเคราะห์การละเมิดสิทธิในรูปภาพ (Consent & Image Rights) กฎหมายว่าด้วยอาชญากรรมไซเบอร์ และผลกระทบทางจิตใจต่อผู้ตกเป็นเหยื่อ\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนร่วมกันสร้าง 'ข้อตกลงร่วมการใช้สื่อ AI อย่างเคารพสิทธิ' และวางแนวทางรับมือเมื่อถูกคุกคาม\n4. ขั้นสะท้อนคิด (Reflect): สะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Shape AI & Engage with AI) เรื่องความเป็นพลเมืองดิจิทัลที่รับผิดชอบ",
+    "assessment": "- ประเมินสมรรถนะการตระหนักรู้กฎหมายและสิทธิดิจิทัล (Digital Rights & AI Law Literacy)\n- ประเมินชิ้นงานข้อตกลงและแนวทางการรับมือภัยไซเบอร์ (Anti-Deepfake Harassment Protocol)\n- แบบวัดทักษะการเป็นพลเมืองดิจิทัล (PISA 2029 MAIL Digital Citizenship Quiz)",
+    "materials": "- บทความข่าวจาก PPTV HD36 เรื่อง 'แจ้ง ตร.ไซเบอร์เอาผิดเพื่อนนักเรียนใช้ AI ตัดต่อภาพอนาจาร'\n- ตัวอย่างสื่ออินโฟกราฟิกกฎหมาย พ.ร.บ.คอมพิวเตอร์ และการรับมือ Cyberbullying\n- ใบงานวิเคราะห์กรณีศึกษา 'AI Image Generation & Consent Case Study'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Shape AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิด (เช่น Padlet / Canva / Mentimeter)"
+  },
+  {
+    "id": "8",
+    "title": "ปรึกษาปัญหาใจกับ AI Chatbot อาจไม่ปลอดภัยอย่างที่คิด - รู้เท่าทันการพึ่งพาทางอารมณ์กับ AI",
+    "reference": "https://www.thaipbs.or.th/now/content/3327",
+    "assessmentTool": "https://docs.google.com/document/d/11DVRXMFv1cspxtd1aDKnmGv0QQf0IxJyBEA1vs0UReQ/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI Companion & Digital Emotional Well-being: เมื่อ AI กลายเป็นเพื่อนคุย รู้เท่าทันการพึ่งพาทางอารมณ์อย่างปลอดภัย' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็น 'เมื่อเหงา ท้อแท้ หรือมีปัญหาใจ เคยลองระบายกับ AI Chatbot หรือไม่?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนวิเคราะห์กลไกของ AI Chatbot ในการเลียนแบบความรู้สึก (Parasocial Interaction) ความเสี่ยงด้านสุขภาพจิต และ Privacy Risks\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'คู่มือการใช้ AI Chatbot อย่างมีขอบเขตและปลอดภัย'\n4. ขั้นสะท้อนคิด (Reflect): ร่วมกันสะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Manage AI) ถึงการรักษา Human Agency ในการจัดการสุขภาวะทางอารมณ์",
+    "assessment": "- ประเมินสมรรถนะการตระหนักรู้ขอบเขต AI กับสุขภาวะทางอารมณ์ (AI & Emotional Well-being Literacy)\n- ประเมินชิ้นงานคู่มือการใช้ AI Chatbot อย่างปลอดภัย (Safe AI Chatbot Usage Guide)\n- แบบวัดทักษะการกำกับตนเองทางอารมณ์ในยุค AI (PISA 2029 MAIL Emotional Self-Regulation Quiz)",
+    "materials": "- บทความข่าวจาก Thai PBS เรื่อง 'ปรึกษาปัญหาใจกับ AI Chatbot อาจไม่ปลอดภัยอย่างที่คิด'\n- กรณีศึกษาการใช้ AI Companion และผลกระทบต่อสุขภาพจิตวัยรุ่น\n- ใบงานวิเคราะห์ 'AI Chatbot Boundary Setting & Emotional Well-being Worksheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Manage AI\n- แพลตฟอร์มออนไลน์ (เช่น Padlet / Canva / Kahoot)"
+  },
+  {
+    "id": "9",
+    "title": "ส่องความเนียนระดับ Ultra Smooth ของมิจฉาชีพไซเบอร์ยุค AI: รู้ทันก่อนตกเป็นเหยื่อ",
+    "reference": "https://www.thaipbs.or.th/verify/article/content/14211",
+    "assessmentTool": "https://docs.google.com/document/d/1PWUkdosef3J618WiYA7uzctasGwmW1S24n_0Rz-zfz0/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI Scam Detective: ส่องมิจฉาชีพไซเบอร์ยุค AI เท่าทันก่อนตกเป็นเหยื่อ' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดกรณีศึกษามิจฉาชีพที่ใช้ AI สร้าง Persona และบทสนทนาหลอกลวง แล้วให้นักเรียนวิเคราะห์ว่า 'คุณจะสังเกตอะไรได้บ้างเพื่อรู้ว่าคือมิจฉาชีพ?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนวิเคราะห์รูปแบบกลโกงมิจฉาชีพยุค AI เทคนิค Social Engineering และช่องโหว่ทางจิตวิทยาที่ถูกโจมตี\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'แผนที่รู้ทันมิจฉาชีพ AI' (AI Scam Awareness Map) พร้อมแนวทางการรายงานและขอความช่วยเหลือ\n4. ขั้นสะท้อนคิด (Reflect): สะท้อนคิดในมิติ PISA 2029 MAIL Literacy (Engage with AI & Shape AI) ถึงการสร้างภูมิคุ้มกันชุมชนดิจิทัล",
+    "assessment": "- ประเมินสมรรถนะการจับสังเกตและวิเคราะห์ AI Scam (Cyber Scam Detection Assessment)\n- ประเมินชิ้นงาน 'AI Scam Awareness Map' ด้วยแบบประเมินรูบริก\n- แบบวัดทักษะการป้องกันภัยไซเบอร์ (PISA 2029 MAIL Cyber Safety Quiz)",
+    "materials": "- กรณีศึกษามิจฉาชีพที่ใช้ AI หลอกลวง\n- ใบงานวิเคราะห์ 'AI Scam Patterns & Social Engineering Worksheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy\n- แพลตฟอร์ม interactive (เช่น Kahoot / Padlet)"
+  },
+  {
+    "id": "10",
+    "title": "\"AI\" เขย่าตลาดแรงงาน สภาพัฒน์ฯเตือนคนไทย 2.2 ล้านคน \"เสี่ยงตกงาน\" - รู้เท่าทันการปรับตัวและพัฒนาสมรรถนะยุค AI",
+    "reference": "https://www.thaipbs.or.th/news/content/506729",
+    "assessmentTool": "https://docs.google.com/document/d/136XbVmTbBNhJW7hqcucGsUinfMDWgymRl4Ox5i14bT0/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI & Future Skills: ปรับตัวและเรียนรู้ร่วมกับ AI อย่างทรงพลัง' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็นผลสำรวจสภาพัฒน์ฯ 'AI เสี่ยงเข้ามารองรับและแทนที่แรงงานไทย 2.2 ล้านคน' แล้วให้นักเรียนร่วมกันอภิปราย\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนวิเคราะห์ความแตกต่างระหว่าง AI ทำแทน 100% กับ Human-AI Collaboration และทักษะที่ AI ยังแทนที่ไม่ได้\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนออกแบบ 'ผังสมรรถนะมนุษย์ยุค AI' (Human Competency Map for AI Era)\n4. ขั้นสะท้อนคิด (Reflect): อภิปรายในมิติ PISA 2029 MAIL Literacy ถึงการรักษา Human Agency และการวางแผน Lifelong Learning",
+    "assessment": "- ประเมินสมรรถนะการวิเคราะห์ผลกระทบของ AI ต่อสังคมและแรงงาน\n- ประเมินชิ้นงานการออกแบบผังสมรรถนะและการปรับตัว (Future Skill Mapping)\n- แบบวัดทักษะการเป็นพลเมืองดิจิทัลและการวางแผนการเรียนรู้ยุค AI",
+    "materials": "- บทความข่าวจาก Thai PBS เรื่อง '\"AI\" เขย่าตลาดแรงงาน สภาพัฒน์ฯเตือนคนไทย 2.2 ล้านคน \"เสี่ยงตกงาน\"'\n- ตัวอย่างกรณีศึกษาการประยุกต์ใช้ AI ในอาชีพต่างๆ\n- ใบงานวิเคราะห์ทักษะมนุษย์ vs AI 'Human-AI Competency Mapping Worksheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Manage AI, Create with AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิดและจัดทำชิ้นงานออนไลน์ (เช่น Canva / Padlet / Kahoot)"
+  },
+  {
+    "id": "11",
+    "title": "\"AI\" เขย่าตลาดแรงงาน สภาพัฒน์ฯเตือนคนไทย 2.2 ล้านคน \"เสี่ยงตกงาน\" - รู้เท่าทันการปรับตัวและพัฒนาสมรรถนะยุค AI",
+    "reference": "https://www.thaipbs.or.th/news/content/506729",
+    "assessmentTool": "https://docs.google.com/document/d/136XbVmTbBNhJW7hqcucGsUinfMDWgymRl4Ox5i14bT0/edit?usp=sharing",
+    "activities": "กิจกรรม 'AI & Future Skills: ปรับตัวและเรียนรู้ร่วมกับ AI อย่างทรงพลัง' (สำหรับนักเรียน ม.1-ม.3):\n1. ขั้นนำ (Engage): ครูเปิดประเด็นผลสำรวจสภาพัฒน์ฯ 'AI เสี่ยงเข้ามารองรับและแทนที่แรงงานไทย 2.2 ล้านคน' แล้วให้นักเรียนร่วมกันอภิปรายว่า 'อาชีพใดบ้างที่ AI ทำแทนได้?'\n2. ขั้นสำรวจและวิเคราะห์ (Explore & Analyze): นักเรียนแบ่งกลุ่มศึกษาบทความข่าวการเข้าถึงเทคโนโลยี AI ในตลาดแรงงาน วิเคราะห์ 3 ประเด็น: (1) ความแตกต่างระหว่างการใช้ AI ทำแทน 100% กับ Human-AI Collaboration (2) ทักษะเฉพาะของมนุษย์ที่ AI ไม่มี และ (3) แนวทาง Upskill & Reskill\n3. ขั้นสร้างสรรค์และแก้ปัญหา (Create & Manage): นักเรียนสวมบทบาทเป็น 'ที่ปรึกษาการพัฒนาอาชีพยุค AI' ออกแบบ 'ผังสมรรถนะมนุษย์ยุค AI' และอินโฟกราฟิก 'ทักษะที่ต้อง Upskill'\n4. ขั้นสะท้อนคิด (Reflect): อภิปรายในมิติ PISA 2029 MAIL Literacy (Manage AI, Create with AI & Engage with AI) ถึงการรักษา Human Agency และ Lifelong Learning",
+    "assessment": "- ประเมินสมรรถนะการวิเคราะห์ผลกระทบของ AI ต่อสังคมและแรงงาน (AI Labor & Social Impact Assessment)\n- ประเมินชิ้นงานการออกแบบผังสมรรถนะและการปรับตัว (Future Skill Mapping & Upskilling Plan Rubric)\n- แบบวัดทักษะการเป็นพลเมืองดิจิทัลและการวางแผนการเรียนรู้ยุค AI (PISA 2029 MAIL Future Skills Quiz)",
+    "materials": "- บทความข่าวจาก Thai PBS เรื่อง '\"AI\" เขย่าตลาดแรงงาน สภาพัฒน์ฯเตือนคนไทย 2.2 ล้านคน \"เสี่ยงตกงาน\"'\n- ตัวอย่างกรณีศึกษาการประยุกต์ใช้ AI ในอาชีพต่างๆ\n- ใบงานวิเคราะห์ทักษะมนุษย์ vs AI 'Human-AI Competency Mapping Worksheet'\n- สไลด์กรอบ PISA 2029 MAIL Literacy โดเมน Manage AI, Create with AI และ Engage with AI\n- แพลตฟอร์มสะท้อนคิดและจัดทำชิ้นงานออนไลน์ (เช่น Canva / Padlet / Kahoot)"
+  }
 ];
-
 
 
 // ─── CSV Parser (multiline-safe) ─────────────────────
@@ -443,7 +451,7 @@ function toast(msg, icon = '✅') {
 // ─── Fetch Helpers ───────────────────────────────────
 
 /**
- * fetch() with manual timeout (no AbortSignal.timeout — max browser compat)
+ * fetch() with manual timeout
  */
 function fetchWithTimeout(url, ms) {
   const ctrl = new AbortController();
@@ -453,7 +461,8 @@ function fetchWithTimeout(url, ms) {
 
 /**
  * JSONP loader – loads gviz via <script> tag → ZERO CORS restriction
- * Works from file://, localhost, any domain, any protocol
+ * ✅ IMPORTANT: Google Visualization API requires tqx=responseHandler:<name>
+ *    NOT &callback=<name> (which does not work with gviz)
  */
 function fetchViaJSONP(timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -482,24 +491,23 @@ function fetchViaJSONP(timeoutMs) {
       reject(new Error('Script load error – ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'));
     };
 
-    // Use &tq= to select all rows; callback= for JSONP; _t= timestamp to bypass all caches
-    script.src = GVIZ_BASE + '&tq=&callback=' + cbName + '&_t=' + Date.now();
+    // ✅ tqx=responseHandler:<cbName> is the correct JSONP parameter for Google Visualization API
+    // _t= timestamp prevents all caching layers
+    script.src = GVIZ_BASE + '&tq=&tqx=responseHandler:' + cbName + '&_t=' + Date.now();
     document.head.appendChild(script);
   });
 }
 
 // ─── Main Fetch Pipeline ─────────────────────────────
 async function fetchItems() {
-  const ts = Date.now(); // timestamp กันแคชทุกรอบ
+  const ts = Date.now();
 
   // ── 1. fetch() JSON direct – เร็วสุด, real-time ──
-  // Google Visualization JSON endpoint อนุญาต CORS สำหรับ Public Sheet
   try {
     const url = `${GVIZ_BASE}&tqx=out:json&_t=${ts}`;
     const r   = await fetchWithTimeout(url, 10000);
     if (r.ok) {
       const text = await r.text();
-      // Google wraps response in: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
       const m = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
       if (m) {
         const data = JSON.parse(m[1]);
@@ -532,7 +540,7 @@ async function fetchItems() {
     console.warn('[PISA] JSONP failed:', e.message);
   }
 
-  // ── 3. Vercel proxy fallback ──
+  // ── 3. Vercel proxy fallback (ถ้า deploy บน Vercel) ──
   if (window.location.protocol !== 'file:') {
     try {
       const r = await fetchWithTimeout(`${API_PATH}?_t=${ts}`, 8000);
@@ -549,7 +557,7 @@ async function fetchItems() {
     } catch (_) {}
   }
 
-  // ── 4. Embedded fallback (รับประกันเสมอ 4 รายการ) ──
+  // ── 4. Embedded fallback (รับประกันเสมอ) ──
   console.info('[PISA] ℹ️ using embedded fallback data (', FALLBACK_DATA.length, 'items)');
   toast('แสดงข้อมูล Offline – กด Refresh เมื่อมีอินเทอร์เน็ต', 'ℹ️');
   return FALLBACK_DATA;
@@ -601,7 +609,6 @@ async function loadData() {
 
     toast(`โหลดข้อมูลสำเร็จ ${items.length} กิจกรรม ✨`);
 
-    // ✅ เริ่ม polling ตรวจจับการเปลี่ยนแปลง
     hideUpdateBanner();
     startPolling();
 
@@ -621,10 +628,6 @@ async function loadData() {
 }
 
 // ─── Update Notification Banner ──────────────────────
-
-/**
- * สร้าง / แสดงแบนเนอร์แจ้งเตือนมีข้อมูลใหม่
- */
 function showUpdateBanner() {
   let banner = document.getElementById('updateBanner');
 
@@ -643,7 +646,6 @@ function showUpdateBanner() {
         <button class="banner-btn-dismiss" onclick="hideUpdateBanner()" aria-label="ปิด">✕</button>
       </div>`;
 
-    // แทรกหลัง header
     const header = document.querySelector('.site-header');
     if (header && header.nextSibling) {
       header.parentNode.insertBefore(banner, header.nextSibling);
@@ -652,7 +654,6 @@ function showUpdateBanner() {
     }
   }
 
-  // Force reflow ก่อน animate
   banner.classList.remove('banner-visible');
   requestAnimationFrame(() => {
     requestAnimationFrame(() => banner.classList.add('banner-visible'));
@@ -670,17 +671,12 @@ function hideUpdateBanner() {
 function refreshAndHide() {
   hideUpdateBanner();
   stopPolling();
-  loadData(); // loadData จะเรียก startPolling() ใหม่หลังโหลดสำเร็จ
+  loadData();
 }
 
 // ─── Change Detection Polling ─────────────────────────
-
-/**
- * ดึง sig เดียวจาก gviz โดยไม่ parse เนื้อหาทั้งหมด
- * เพื่อตรวจว่า Sheet มีการเปลี่ยนแปลงหรือไม่
- */
 function pollForChanges() {
-  if (!currentSig) return; // ยังไม่เคยโหลดข้อมูลจริง
+  if (!currentSig) return;
 
   const cbName = '__pisaPoll_' + Date.now();
   const script = document.createElement('script');
@@ -692,7 +688,6 @@ function pollForChanges() {
     try { if (script.parentNode) document.head.removeChild(script); } catch(_) {}
   };
 
-  // Timeout 20 วินาที
   const timer = setTimeout(() => { if (!done) cleanup(); }, 20000);
 
   window[cbName] = function(data) {
@@ -704,7 +699,7 @@ function pollForChanges() {
     if (data.sig !== currentSig) {
       console.info('[PISA] 🔔 Data changed! old sig:', currentSig, '→ new sig:', data.sig);
       showUpdateBanner();
-      stopPolling(); // หยุด poll จนกว่าผู้ใช้จะกด refresh
+      stopPolling();
     }
   };
 
@@ -713,14 +708,14 @@ function pollForChanges() {
     cleanup();
   };
 
-  // ดึงเฉพาะ metadata (limit=0 → ไม่ดึงข้อมูล rows จริง แต่ได้ sig) + _t= timestamp กันแคช
-  script.src = GVIZ_BASE + '&tqlimit=0&callback=' + cbName + '&_t=' + Date.now();
+  // ✅ tqx=responseHandler: is the correct parameter for Google Visualization API JSONP
+  script.src = GVIZ_BASE + '&tqlimit=0&tqx=responseHandler:' + cbName + '&_t=' + Date.now();
   document.head.appendChild(script);
 }
 
 function startPolling() {
-  stopPolling(); // ล้างของเก่าก่อน
-  if (!currentSig) return; // มี sig ถึงจะ poll ได้
+  stopPolling();
+  if (!currentSig) return;
   pollTimer = setInterval(pollForChanges, POLL_INTERVAL_MS);
   console.log('[PISA] 🕐 Polling started – interval:', POLL_INTERVAL_MS / 1000, 's');
 }
@@ -734,11 +729,9 @@ function stopPolling() {
 
 // ─── Init ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Restore saved preferences
   setTheme(localStorage.getItem('pisa-theme') || 'light');
   setFont(localStorage.getItem('pisa-font')   || 'medium');
 
-  // Search
   const searchEl = document.getElementById('searchInput');
   const clearEl  = document.getElementById('clearSearch');
 
@@ -756,10 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
     searchEl.focus();
   });
 
-  // Load data
   loadData();
 
-  // หยุด poll เมื่อปิดแท็บ
   window.addEventListener('beforeunload', stopPolling);
 });
-
